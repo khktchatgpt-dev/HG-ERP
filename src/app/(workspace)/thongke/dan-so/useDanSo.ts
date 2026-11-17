@@ -13,7 +13,7 @@ export type Buoc = 'dan' | 'xem' | 'xong'
 export type Loc = 'all' | 'khop' | 'moi' | 'sua'
 
 /** Sửa của người dùng trên một dòng dán: đổi tên (nhận gợi ý) / bỏ ô chữ sai. */
-type Sua = { ten?: string; boO?: string[] }
+type Sua = { ten?: string; boO?: string[]; moi?: boolean }
 
 /**
  * State + xử lý của màn Dán sổ Excel. Đọc vùng dán ở client (`lib/dan-so`, thuần),
@@ -50,6 +50,7 @@ export function useDanSo(opt: TuyChonDanSo) {
           return {
             ...d,
             ten: s.ten ?? d.ten,
+            them_moi: s.moi,
             sai: d.sai.filter((x) => !s.boO?.includes(x.iso)),
           }
         })
@@ -74,6 +75,7 @@ export function useDanSo(opt: TuyChonDanSo) {
         can: r.can,
         o: r.o,
         sai: r.sai,
+        them_moi: r.them_moi,
       })),
     }),
     [lsxId, lineId, stage, teamId, doc.cot, rows],
@@ -162,6 +164,7 @@ export function useDanSo(opt: TuyChonDanSo) {
     setLoc('all')
     setBuoc('xem')
   }
+  const themMoi = (hang: number) => setSua((s) => ({ ...s, [hang]: { ...s[hang], moi: true } }))
   const nhanGoiY = (hang: number, ten: string) =>
     setSua((s) => ({ ...s, [hang]: { ...s[hang], ten } }))
   const boO = (hang: number, iso: string) =>
@@ -205,7 +208,7 @@ export function useDanSo(opt: TuyChonDanSo) {
     chonCD: (v: string) => doiDauVao(() => setStage(v)),
     chonTo: (v: string) => doiDauVao(() => setTeamId(v)),
     chonNam: (v: number) => doiDauVao(() => setNam(v)),
-    xemTruoc, nhanGoiY, boO, nhayToi, ghi, lamLai,
+    xemTruoc, nhanGoiY, themMoi, boO, nhayToi, ghi, lamLai,
   } as const
 }
 

@@ -41,6 +41,8 @@ export type DongXem = {
   /** khop · moi (sẽ thêm vào bảng chi tiết) · gan (gợi ý) · trung (nhiều cụm) · sai (ô chữ / chặn) · ngoai (mã SP không thuộc lệnh này — bỏ qua, không ghi) */
   kieu: 'khop' | 'moi' | 'gan' | 'trung' | 'sai' | 'ngoai'
   comp_id: string | null
+  /** Dòng SP (đợt) đích của chi tiết MỚI — ghi dùng đúng dòng xem trước đã chọn. */
+  line_id?: string | null
   /** Tên gợi ý khi `kieu = 'gan'`. */
   gan: string | null
   /** Lý do chặn ghi — chữ người đọc được, kèm cách gỡ. */
@@ -148,6 +150,12 @@ function taoLuotDi(
   }
 }
 
+/** Khớp tên; người dùng đã bấm "thêm mới" thì gần-khớp coi là chi tiết mới. */
+function khopMoi(r: DanSoInput['rows'][number], ds: CtLenh[]) {
+  const k = khopChiTiet(r, ds)
+  return k.kieu === 'gan' && r.them_moi ? ({ kieu: 'moi' } as const) : k
+}
+
 /** Tính xem trước. Không ghi gì. */
 async function tinh(input: DanSoInput, user: User) {
   const { lsx, components, lines, stagesCat, existing, routeByLine } = await tai(
@@ -167,8 +175,12 @@ async function tinh(input: DanSoInput, user: User) {
   // bản bảng chi tiết). Số của file là theo mã, nên mã nhiều đợt buộc chọn đợt ở thanh trên.
   const dongTheoMa = new Map<string, typeof lines>()
   for (const l of lines) {
-    const k = chuan(l.product_code)
-    dongTheoMa.set(k, [...(dongTheoMa.get(k) ?? []), l])
+    // Sổ khách gọi theo MÃ KHÁCH (customer_item_code) — Băng 1 = 2723875 trong file, BN0229HG-IR trên lệnh.
+    for (const m of new Set([l.product_code, l.customer_item_code ?? ''])) {
+      if (!m) continue
+      const k = chuan(m)
+      dongTheoMa.set(k, [...(dongTheoMa.get(k) ?? []), l])
+    }
   }
   const macDinhLine =
     (input.line_id && lines.find((l) => l.id === input.line_id)) ||
@@ -189,8 +201,12 @@ async function tinh(input: DanSoInput, user: User) {
 
   const cotLoi: { iso: string; loi: string }[] = []
   const chot = new Set<string>()
+  // Sổ Excel hay có cột cho những ngày CHƯA tới (kế hoạch) — chỉ chặn khi cột đó có số.
+  const ngayCoSo = new Set(input.rows.flatMap((r) => Object.keys(r.o)))
   for (const iso of input.cot) {
-    if (iso > today) cotLoi.push({ iso, loi: 'Ngày tương lai — không ghi sổ trước' })
+    if (iso > today && ngayCoSo.has(iso)) {
+      cotLoi.push({ iso, loi: 'Ngày tương lai — không ghi sổ trước' })
+    }
   }
   const ngayCan = new Set(
     input.rows.flatMap((r) => Object.keys(r.o)).filter((d) => d <= today),
@@ -251,36 +267,64 @@ async function tinh(input: DanSoInput, user: User) {
     }
     if (nhieuDot) {
       // Mã SP tách nhiều đợt: số của file là theo MÃ → LẤP theo thứ tự đợt (đợt 1 tới khi
-      // đủ số cần, rồi đợt 2…; đợt cuối nhận phần dư và bị cảnh báo vượt).
-      const dotTen = (l: (typeof lines)[number]) => l.ship_label ?? l.ship_date ?? `#${l.sort_order + 1}`
-      const cs: { line: (typeof lines)[number]; comp: ComponentRow }[] = []
+      // đủ số cần, rồi đợt 2…; đợt cuối nhận phần dư và bị cảnh báo vượt). Chi tiết chưa có
+      // ở đợt nào thì THÊM vào đợt đó (như dán một đợt) — id tạm `moi:<hàng>:<đợt>`.
+      const dotTen = (l: (typeof lines)[number]) =>
+        l.ship_label ?? l.ship_date ?? `#${l.sort_order + 1}`
+      type Dot = { line: (typeof lines)[number]; id: string; comp: ComponentRow | null }
+      const cs: Dot[] = []
+      let coMoi = false
+      let ganMulti: string | null = null
       for (const l of nhieuDot) {
         const ds: CtLenh[] = components
           .filter((c) => c.production_order_line_id === l.id)
           .map((c) => ({ id: c.id, ten: c.name, cum: c.cluster, kind: c.kind }))
-        const kk = khopChiTiet(r, ds)
-        if (kk.kieu !== 'khop') {
+        const kk = khopMoi(r, ds)
+        if (kk.kieu === 'khop') {
+          const c = components.find((x) => x.id === kk.id) ?? null
+          if (c) cs.push({ line: l, id: c.id, comp: c })
+        } else if (kk.kieu === 'moi') {
+          if (!canKhai) {
+            vanDe.push('Chưa có trên lệnh và bạn không có quyền thêm vào bảng chi tiết')
+            break
+          }
+          if (!routeForGroup('FRAME').includes(input.stage)) {
+            vanDe.push(
+              `Chi tiết mới chỉ thêm được ở công đoạn ${routeForGroup('FRAME')
+                .map((x) => stagesCat.find((y) => y.code === x)?.label ?? x)
+                .join(' · ')}`,
+            )
+            break
+          }
+          coMoi = true
+          cs.push({ line: l, id: `moi:${r.hang}:${l.id}`, comp: null })
+        } else {
+          if (kk.kieu === 'gan') ganMulti = kk.ten
           vanDe.push(
-            `Đợt ${dotTen(l)} chưa có chi tiết "${r.ten}" (${kk.kieu === 'gan' ? `gần giống "${kk.ten}"` : kk.kieu === 'trung' ? 'có ở nhiều cụm' : 'không có'}) — chọn riêng đợt đó ở ô "Mã hàng" để xử lý`,
+            `Đợt ${dotTen(l)}: "${r.ten}" ${kk.kieu === 'gan' ? `gần giống "${kk.ten}" — sửa tên cho khớp` : 'có ở nhiều cụm — dán thêm cột Cụm'}`,
           )
           break
         }
-        const c = components.find((x) => x.id === kk.id)
-        if (c) cs.push({ line: l, comp: c })
       }
       for (const sa of r.sai) {
         vanDe.push(
           `Ô ${sa.iso.slice(8)}/${sa.iso.slice(5, 7)} "${sa.raw}" không phải số — sửa trong Excel hoặc bỏ ô`,
         )
       }
-      if (vanDe.length === 0 && cs.length > 0) {
-        const loi = luotDi(cs[0].comp)
-        if (loi) vanDe.push(`"${cs[0].comp.name}": ${loi}`)
+      const comp0 = cs.find((x) => x.comp)?.comp
+      if (vanDe.length === 0 && comp0) {
+        const loi = luotDi(comp0)
+        if (loi) vanDe.push(`"${comp0.name}": ${loi}`)
       }
+      const canCua = (d: Dot) =>
+        d.comp
+          ? need(d.comp)
+          : (r.ct_sp ?? 1) * (qtyByLine.get(d.line.id) ?? 0)
+      const lamCua = (d: Dot) => (d.comp ? (daLam.get(d.comp.id) ?? 0) : 0)
       const o: DongXem['o'] = {}
       let tongGhi = 0
       const phan = new Map<string, { comp_id: string; dot: string; theo_ngay: Record<string, number> }>()
-      const dauKy = (c: ComponentRow) => conLai.get(c.id) ?? need(c) - (daLam.get(c.id) ?? 0)
+      const dauKy = (d: Dot) => conLai.get(d.id) ?? canCua(d) - lamCua(d)
       if (vanDe.length === 0) {
         for (const iso of Object.keys(r.o).sort()) {
           const qty = r.o[iso]
@@ -290,7 +334,10 @@ async function tinh(input: DanSoInput, user: User) {
             tomTat.chot++
             continue
           }
-          const co = cs.reduce((t, x) => t + (coTheoNgay.get(`${x.comp.id}|${iso}`) ?? 0), 0)
+          const co = cs.reduce(
+            (t, x) => t + (x.comp ? (coTheoNgay.get(`${x.comp.id}|${iso}`) ?? 0) : 0),
+            0,
+          )
           if (co > 0) {
             const trung = Math.abs(co - qty) < 1e-9
             o[iso] = { tt: trung ? 'trung' : 'khac', co }
@@ -299,16 +346,16 @@ async function tinh(input: DanSoInput, user: User) {
             continue
           }
           let con = qty
-          cs.forEach(({ line: l, comp }, i) => {
+          cs.forEach((d, i) => {
             if (con <= 0) return
             const cuoi = i === cs.length - 1
-            const take = cuoi ? con : Math.min(con, Math.max(0, dauKy(comp)))
+            const take = cuoi ? con : Math.min(con, Math.max(0, dauKy(d)))
             if (take <= 0) return
-            conLai.set(comp.id, dauKy(comp) - take)
+            conLai.set(d.id, dauKy(d) - take)
             con -= take
-            const pp = phan.get(comp.id) ?? { comp_id: comp.id, dot: dotTen(l), theo_ngay: {} }
+            const pp = phan.get(d.id) ?? { comp_id: d.id, dot: dotTen(d.line), theo_ngay: {} }
             pp.theo_ngay[iso] = (pp.theo_ngay[iso] ?? 0) + take
-            phan.set(comp.id, pp)
+            phan.set(d.id, pp)
           })
           o[iso] = { tt: 'ghi' }
           tongGhi += qty
@@ -316,27 +363,28 @@ async function tinh(input: DanSoInput, user: User) {
           ngayGhi.add(iso)
         }
         for (const pp of phan.values()) {
-          const c = cs.find((x) => x.comp.id === pp.comp_id)!.comp
-          const them = Object.values(pp.theo_ngay).reduce((a, b) => a + b, 0)
-          if (need(c) > 0 && (daLam.get(c.id) ?? 0) + them > need(c)) {
+          const d = cs.find((x) => x.id === pp.comp_id)!
+          const them = Object.values(pp.theo_ngay).reduce((x, y) => x + y, 0)
+          if (canCua(d) > 0 && lamCua(d) + them > canCua(d)) {
             canhBao.push(
-              `${c.name} (đợt ${pp.dot}): sẽ có ${(daLam.get(c.id) ?? 0) + them} so với cần ${need(c)} — vượt (vẫn ghi được)`,
+              `${r.ten} (đợt ${pp.dot}): sẽ có ${lamCua(d) + them} so với cần ${canCua(d)} — vượt (vẫn ghi được)`,
             )
           }
         }
       }
+      if (coMoi && vanDe.length === 0) tomTat.moi++
       if (vanDe.length) tomTat.chan++
       return {
         hang: r.hang,
-        kieu: vanDe.length ? 'sai' : 'khop',
+        kieu: vanDe.length ? (ganMulti && vanDe.length === 1 ? 'gan' : 'sai') : coMoi ? 'moi' : 'khop',
         comp_id: null,
-        gan: null,
+        gan: ganMulti,
         van_de: vanDe,
         o,
         tong_ghi: tongGhi,
         phan: [...phan.values()],
-        can: cs.reduce((t, x) => t + need(x.comp), 0),
-        da_lam: cs.reduce((t, x) => t + (daLam.get(x.comp.id) ?? 0), 0),
+        can: cs.reduce((t, x) => t + canCua(x), 0),
+        da_lam: cs.reduce((t, x) => t + lamCua(x), 0),
       }
     }
     for (const s of r.sai) {
@@ -349,7 +397,7 @@ async function tinh(input: DanSoInput, user: User) {
           .filter((c) => c.production_order_line_id === line.id)
           .map((c) => ({ id: c.id, ten: c.name, cum: c.cluster, kind: c.kind }))
       : []
-    const k = line ? khopChiTiet(r, ds) : ({ kieu: 'moi' } as const)
+    const k = line ? khopMoi(r, ds) : ({ kieu: 'moi' } as const)
     let kieu: DongXem['kieu'] = vanDe.length ? 'sai' : 'khop'
     let compId: string | null = null
     let gan: string | null = null
@@ -425,6 +473,7 @@ async function tinh(input: DanSoInput, user: User) {
       hang: r.hang,
       kieu,
       comp_id: compId,
+      line_id: line?.id ?? null,
       gan,
       van_de: vanDe,
       o,
@@ -546,10 +595,7 @@ export const danSoService = {
       const d = r.dong[i]
       if (d.kieu !== 'moi') continue
       const row = input.rows[i]
-      const line =
-        (row.ma_sp
-          ? r.lines.find((l) => chuan(l.product_code) === chuan(row.ma_sp ?? ''))
-          : null) ?? r.macDinhLine
+      const line = r.lines.find((l) => l.id === d.line_id) ?? null
       if (!line) continue
       const id = await componentsRepo.insertOne({
         production_order_id: input.lsx_id,
@@ -569,6 +615,31 @@ export const danSoService = {
       moiId.set(i, id)
     }
 
+    // 1b) Chi tiết mới của dòng nhiều đợt: mỗi đợt một bản, id tạm → id thật.
+    const moiDot = new Map<string, string>()
+    for (let i = 0; i < r.dong.length; i++) {
+      for (const pp of r.dong[i].phan ?? []) {
+        if (!pp.comp_id.startsWith('moi:')) continue
+        const lineId = pp.comp_id.split(':')[2]
+        const row = input.rows[i]
+        const id = await componentsRepo.insertOne({
+          production_order_id: input.lsx_id,
+          production_order_line_id: lineId,
+          kind: 'part',
+          cluster: row.cum || null,
+          name: row.ten,
+          group_code: 'FRAME',
+          unit: null,
+          qty_per_unit: row.ct_sp ?? 1,
+          first_stage: null,
+          final_stage: null,
+          note: 'Thêm từ Dán sổ Excel',
+          dm_kg: row.dm ?? null,
+        })
+        moiDot.set(pp.comp_id, id)
+      }
+    }
+
     // 2) Mỗi ngày một phiếu nhập bù — đi qua đúng đường ghi sổ chính.
     const theoNgay = new Map<string, { component_id: string; qty: number }[]>()
     r.dong.forEach((d, i) => {
@@ -576,7 +647,7 @@ export const danSoService = {
         for (const pp of d.phan) {
           for (const [iso, qty] of Object.entries(pp.theo_ngay)) {
             const arr = theoNgay.get(iso) ?? []
-            arr.push({ component_id: pp.comp_id, qty })
+            arr.push({ component_id: moiDot.get(pp.comp_id) ?? pp.comp_id, qty })
             theoNgay.set(iso, arr)
           }
         }
@@ -619,6 +690,6 @@ export const danSoService = {
         })
       }
     }
-    return { phieu, moi_tao: moiId.size, canh_bao: [...new Set(canhBao)] }
+    return { phieu, moi_tao: moiId.size + moiDot.size, canh_bao: [...new Set(canhBao)] }
   },
 }

@@ -59,6 +59,9 @@ export function LuoiXem({ d }: { d: DanSoCtx }) {
                         onClick={() => d.nhanGoiY(r.hang, x.gan ?? r.ten)}
                       >
                         nhận
+                      </button>{' '}
+                      <button type="button" className="lnk" onClick={() => d.themMoi(r.hang)}>
+                        thêm mới
                       </button>
                     </span>
                   ) : loi ? (

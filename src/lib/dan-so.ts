@@ -18,6 +18,8 @@ export type DongDan = {
   cum: string
   ten: string
   ma_sp: string | null
+  /** Người dùng xác nhận là chi tiết MỚI (không phải gõ sai tên) — đặt ở màn xem trước. */
+  them_moi?: boolean
   ct_sp: number | null
   dm: number | null
   can: number | null

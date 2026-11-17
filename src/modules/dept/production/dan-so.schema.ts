@@ -17,6 +17,8 @@ export const danSoDongSchema = z.object({
   can: z.number().min(0).nullable().optional(),
   o: z.record(iso, z.number().positive().max(10_000_000)),
   sai: z.array(z.object({ iso, raw: z.string().max(40) })).max(400),
+  /** Người dùng xác nhận đây là chi tiết MỚI (không phải gõ sai tên một chi tiết có sẵn). */
+  them_moi: z.boolean().optional(),
 })
 
 export const danSoSchema = z.object({
