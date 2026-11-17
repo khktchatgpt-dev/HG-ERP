@@ -271,6 +271,12 @@ function BuocXem({ d }: { d: DanSoCtx }) {
   ] as const
   return (
     <>
+      {d.dangGhi && x && (
+        <div className="sx-note" role="status">
+          <b>Đang ghi {x.tom_tat.ngay_ghi} phiếu</b> — mỗi phiếu mất vài giây, cả tờ có
+          thể mất vài phút. Đừng đóng trang và đừng bấm Ghi lần nữa.
+        </div>
+      )}
       <TabNgang
         label="Lọc dòng"
         tabs={tabs.map((t) => ({

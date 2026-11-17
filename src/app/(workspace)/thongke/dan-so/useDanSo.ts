@@ -187,7 +187,8 @@ export function useDanSo(opt: TuyChonDanSo) {
     window.setTimeout(() => setNhay(null), 1600)
   }
   const ghi = async () => {
-    if (whyGhi) return
+    // Chặn bấm đôi: hai lượt cùng lúc đều thấy ô chưa có sổ → ghi trùng.
+    if (whyGhi || dangGhi) return
     setDangGhi(true)
     setLoi(null)
     try {
