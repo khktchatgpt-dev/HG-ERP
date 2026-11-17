@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Modal } from '@/components/Modal'
 import { Button } from '@/components/shadcn/button'
@@ -108,8 +108,23 @@ export function QuickAddMaterial({
   const canSimilar = core.similar.length > 0
   const blocked = core.invalid || (canSimilar && !daDoiChieu)
 
+  // Chặn bấm đôi (17/11/2026): `busy` là state, hai cú bấm trong cùng một nhịp vẽ
+  // đều thấy false → hai POST, cú sau ăn lỗi trùng dù mã đã tạo. Ref đổi ngay.
+  const dangGui = useRef(false)
+
+  /** Đưa vào dòng một vật tư (mới tạo hoặc có sẵn) rồi đóng hộp. */
+  function dua(material: CreatedMaterial, tieuDe: string, chu: string) {
+    toast.success(tieuDe, chu)
+    // Ô chọn vật tư cache kết quả tìm theo tab — không xoá thì vật tư vừa tạo
+    // không hiện ra khi gõ lại đúng từ khoá cũ.
+    invalidateMaterialPickCache()
+    onCreated(material)
+    setOpen(false)
+  }
+
   async function handle() {
-    if (blocked || busy) return
+    if (blocked || busy || dangGui.current) return
+    dangGui.current = true
     setBusy(true)
     try {
       const { material } = await api<{ material: CreatedMaterial }>(
@@ -124,18 +139,38 @@ export function QuickAddMaterial({
           },
         },
       )
-      toast.success(`Đã thêm ${material.code}`, 'Vật tư vào ngay dòng đặt bên dưới')
-      // Ô chọn vật tư cache kết quả tìm theo tab — không xoá thì vật tư vừa tạo
-      // không hiện ra khi gõ lại đúng từ khoá cũ.
-      invalidateMaterialPickCache()
-      onCreated(material)
-      setOpen(false)
+      dua(material, `Đã thêm ${material.code}`, 'Vật tư vào ngay dòng đặt bên dưới')
     } catch (err) {
+      /*
+       * TRÙNG Y HỆT (cùng tên + quy cách, cùng nhóm): mã đã có trong danh mục —
+       * thường chính người này vừa tạo ở lượt trước. Lấy mã đó đưa vào dòng thay
+       * vì bắt người dùng đi tìm lại (17/11/2026, đơn tem HLH của chị Nga).
+       */
+      const id =
+        err instanceof ApiError && err.status === 409
+          ? err.code?.match(/^MATERIAL_EXISTS:(.+)$/)?.[1]
+          : undefined
+      if (id) {
+        try {
+          const { material } = await api<{ material: CreatedMaterial }>(
+            `/api/dept/warehouse/materials/${id}`,
+          )
+          dua(
+            material,
+            `Dùng mã có sẵn ${material.code}`,
+            'Cùng tên và quy cách đã có trong danh mục — không tạo mã mới',
+          )
+          return
+        } catch {
+          // đọc mã có sẵn hỏng thì rơi xuống báo lỗi trùng như cũ
+        }
+      }
       toast.error(
         'Thêm vật tư thất bại',
         err instanceof ApiError ? err.message : 'Có lỗi',
       )
     } finally {
+      dangGui.current = false
       setBusy(false)
     }
   }

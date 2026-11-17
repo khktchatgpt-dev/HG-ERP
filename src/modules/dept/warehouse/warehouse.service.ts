@@ -397,6 +397,9 @@ export const materialsService = {
             `${same.spec ? ` · ${same.spec}` : ''}. ` +
             `Dùng lại mã đó thay vì tạo mã mới (khác nhau mỗi dấu câu/khoảng trắng)` +
             `${spec ? '' : ' — hoặc ghi quy cách nếu là mặt hàng khác cỡ'}.`,
+          // Hộp khai nhanh trong đơn đọc mã này để đưa luôn vật tư có sẵn vào dòng
+          // (17/11/2026: chị Nga bấm Thêm lần hai sau khi mã đã tạo → kẹt ở lỗi).
+          same.id ? `MATERIAL_EXISTS:${same.id}` : 'MATERIAL_EXISTS',
         )
       }
     }
