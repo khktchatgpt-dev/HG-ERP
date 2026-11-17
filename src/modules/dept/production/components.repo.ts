@@ -244,6 +244,7 @@ export const componentsRepo = {
     note: string | null
     /** Định mức kg / chi tiết — màn Dán sổ Excel mang theo cột ĐM của file. */
     dm_kg?: number | null
+    qty_per_assembly?: number | null
   }): Promise<string> {
     const { data, error } = await db()
       .from('production_components')
@@ -252,6 +253,36 @@ export const componentsRepo = {
       .single()
     if (error) throw new Error(error.message)
     return (data as { id: string }).id
+  },
+
+  /** Thêm NHIỀU chi tiết một lượt (Dán sổ Excel) — trả id theo đúng thứ tự đầu vào. */
+  async insertMany(
+    rows: {
+      production_order_id: string
+      production_order_line_id: string
+      kind: 'part' | 'assembly'
+      cluster: string | null
+      name: string
+      group_code: string | null
+      unit: string | null
+      qty_per_unit: number
+      first_stage: string | null
+      final_stage: string | null
+      note: string | null
+      dm_kg?: number | null
+      qty_per_assembly?: number | null
+    }[],
+  ): Promise<string[]> {
+    const ids: string[] = []
+    for (let i = 0; i < rows.length; i += 200) {
+      const { data, error } = await db()
+        .from('production_components')
+        .insert(rows.slice(i, i + 200).map((r) => ({ ...r, sort_order: 9999 })))
+        .select('id')
+      if (error) throw new Error(error.message)
+      ids.push(...((data ?? []) as { id: string }[]).map((x) => x.id))
+    }
+    return ids
   },
 
   /**

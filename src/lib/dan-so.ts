@@ -20,6 +20,8 @@ export type DongDan = {
   ma_sp: string | null
   /** Người dùng xác nhận là chi tiết MỚI (không phải gõ sai tên) — đặt ở màn xem trước. */
   them_moi?: boolean
+  /** Cụm của LỆNH người dùng chọn thay cho chữ ở cột Cụm của file. */
+  cum_ten?: string
   ct_sp: number | null
   dm: number | null
   can: number | null

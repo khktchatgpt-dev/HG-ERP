@@ -3053,3 +3053,12 @@
     border-top: 1px solid var(--sx-line);
   }
 }
+
+/* Dán sổ Excel — dòng đầu nhóm mã SP trong lưới xem trước */
+.sx.sx .sx-ds-tb tr.mh > td {
+  background: var(--sx-card);
+  border-top: 1px solid var(--sx-line);
+  font-weight: 600;
+  padding: 5px 8px;
+  position: static;
+}

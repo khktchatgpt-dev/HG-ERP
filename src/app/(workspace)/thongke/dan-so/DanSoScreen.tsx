@@ -35,7 +35,10 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
           ctx={
             d.buoc === 'xem' ? (
               <>
-                <b>{tenLenh}</b> · {d.doc.cot.length} cột ngày ·{' '}
+                Lệnh <b>{tenLenh}</b> · công đoạn{' '}
+                <b>{d.opt.stages.find((x) => x.code === d.stage)?.label ?? d.stage}</b> ·{' '}
+                <b>{d.opt.teams.find((x) => x.id === d.teamId)?.name}</b> ·{' '}
+                {d.doc.cot.length} cột ngày ·{' '}
                 {d.dangTinh && <span className="mut">đang tính…</span>}
               </>
             ) : (
@@ -46,7 +49,9 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
             <>
               {d.buoc !== 'dan' && (
                 <ApNhom>
-                  <ApNut onClick={d.lamLai}>{d.buoc === 'xong' ? 'Dán tờ khác' : 'Dán lại'}</ApNut>
+                  <ApNut onClick={d.lamLai}>
+                    {d.buoc === 'xong' ? 'Dán tờ khác' : 'Dán lại'}
+                  </ApNut>
                 </ApNhom>
               )}
               {d.buoc === 'dan' && (
@@ -74,12 +79,7 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
               )}
               {d.buoc === 'xem' && (
                 <ApNhom>
-                  <ApNut
-                    primary
-                    onClick={d.ghi}
-                    why={d.whyGhi}
-                    busy={d.dangGhi}
-                  >
+                  <ApNut primary onClick={d.ghi} why={d.whyGhi} busy={d.dangGhi}>
                     {d.xem ? `Ghi ${fmt(d.xem.tom_tat.o_ghi)} ô` : 'Ghi'}
                   </ApNut>
                 </ApNhom>
@@ -122,7 +122,8 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
                   <option value="">Theo cột Mã SP của file</option>
                   {dongSP.map((x) => (
                     <option key={x.id} value={x.id}>
-                      {x.ma} {x.ten}{x.dot ? ` · ${x.dot}` : ''} · SL {fmt(x.qty)}
+                      {x.ma} {x.ten}
+                      {x.dot ? ` · ${x.dot}` : ''} · SL {fmt(x.qty)}
                     </option>
                   ))}
                 </select>
@@ -173,7 +174,11 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
           </div>
         )}
 
-        {d.loi && <div className="sx-note stop" role="alert">{d.loi}</div>}
+        {d.loi && (
+          <div className="sx-note stop" role="alert">
+            {d.loi}
+          </div>
+        )}
 
         {d.buoc === 'dan' && <BuocDan d={d} />}
         {d.buoc === 'xem' && <BuocXem d={d} />}
@@ -227,7 +232,10 @@ function BuocDan({ d }: { d: DanSoCtx }) {
               ))}
               <tr>
                 <td>
-                  {d.doc.cot.slice(0, 3).map((c) => c.nhan).join(', ')}
+                  {d.doc.cot
+                    .slice(0, 3)
+                    .map((c) => c.nhan)
+                    .join(', ')}
                   {d.doc.cot.length > 3 ? ' …' : ''}
                 </td>
                 <td>Số làm từng ngày ({d.doc.cot.length} cột)</td>
@@ -281,15 +289,19 @@ function BuocXem({ d }: { d: DanSoCtx }) {
             </>
           ) : (
             <>
-              <b>Sẵn sàng ghi:</b> {fmt(x.tom_tat.o_ghi)} ô, {x.tom_tat.ngay_ghi} phiếu nhập
-              bù
-              {x.tom_tat.moi > 0 && <>, thêm {x.tom_tat.moi} chi tiết vào bảng chi tiết</>}.
+              <b>Sẵn sàng ghi:</b> {fmt(x.tom_tat.o_ghi)} ô, {x.tom_tat.ngay_ghi} phiếu
+              nhập bù
+              {x.tom_tat.moi > 0 && (
+                <>, thêm {x.tom_tat.moi} chi tiết vào bảng chi tiết</>
+              )}
+              .
             </>
           )}
           {x.tom_tat.ngoai > 0 && (
             <span className="mut">
               {' '}
-              {x.tom_tat.ngoai} dòng có mã SP không thuộc lệnh này — bỏ qua (số của lệnh khác).
+              {x.tom_tat.ngoai} dòng có mã SP không thuộc lệnh này — bỏ qua (số của lệnh
+              khác).
             </span>
           )}
           {(x.tom_tat.trung > 0 || x.tom_tat.khac > 0 || x.tom_tat.chot > 0) && (
@@ -330,11 +342,16 @@ function BuocXem({ d }: { d: DanSoCtx }) {
                 {c.text}
               </button>
             ))}
-            {d.chan.length > 3 && <span className="mut"> … và {d.chan.length - 3} chỗ nữa</span>}
+            {d.chan.length > 3 && (
+              <span className="mut"> … và {d.chan.length - 3} chỗ nữa</span>
+            )}
           </span>
         ) : (
           <span className="sum">
-            Không còn chỗ chặn. <span className="mut">Phiếu nhập bù: không giờ công, không vào Năng suất.</span>
+            Không còn chỗ chặn.{' '}
+            <span className="mut">
+              Phiếu nhập bù: không giờ công, không vào Năng suất.
+            </span>
           </span>
         )}
       </div>
@@ -351,7 +368,10 @@ function BuocXong({ d }: { d: DanSoCtx }) {
   const dmy = (iso: string) => `${iso.slice(8)}/${iso.slice(5, 7)}`
   const tu = ok.length > 0 ? dmy(ok[0].iso) : ''
   const den = ok.length > 0 ? dmy(ok[ok.length - 1].iso) : ''
-  const luc = new Date(k.luc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+  const luc = new Date(k.luc).toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
   const nhan = d.opt.stages.find((x) => x.code === d.stage)?.label ?? d.stage
   const to = d.opt.teams.find((x) => x.id === d.teamId)?.name ?? ''
   return (
@@ -367,7 +387,8 @@ function BuocXong({ d }: { d: DanSoCtx }) {
       </p>
       {hong.length > 0 && (
         <div className="sx-note stop" role="alert">
-          <b>{hong.length} ngày chưa ghi được</b> — sửa rồi dán lại (ô đã ghi sẽ tự bỏ qua):
+          <b>{hong.length} ngày chưa ghi được</b> — sửa rồi dán lại (ô đã ghi sẽ tự bỏ
+          qua):
           <ul className="sx-ds-loi">
             {hong.map((p) => (
               <li key={p.iso}>
@@ -420,7 +441,10 @@ function BuocXong({ d }: { d: DanSoCtx }) {
                   {dmy(p.iso)}/{p.iso.slice(0, 4)}
                 </td>
                 <td className="num">
-                  <Link className="lnk" href={`/thongke/da-ghi?date=${p.iso}&phieu=${p.doc_no}`}>
+                  <Link
+                    className="lnk"
+                    href={`/thongke/da-ghi?date=${p.iso}&phieu=${p.doc_no}`}
+                  >
                     {p.doc_no}
                   </Link>
                 </td>

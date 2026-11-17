@@ -19,6 +19,8 @@ export const danSoDongSchema = z.object({
   sai: z.array(z.object({ iso, raw: z.string().max(40) })).max(400),
   /** Người dùng xác nhận đây là chi tiết MỚI (không phải gõ sai tên một chi tiết có sẵn). */
   them_moi: z.boolean().optional(),
+  /** Người dùng chọn cụm của lệnh cho dòng này (công đoạn đếm cụm, tên cụm trong file khác lệnh). */
+  cum_ten: z.string().trim().max(200).optional(),
 })
 
 export const danSoSchema = z.object({
