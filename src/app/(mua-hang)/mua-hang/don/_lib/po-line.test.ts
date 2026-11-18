@@ -4,6 +4,7 @@ import { deriveLine, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import {
   baremFor,
   cartonPriceSuggest,
+  cartonPriceWarn,
   draftOf,
   lineAmount,
   lineFromPo,
@@ -1550,5 +1551,56 @@ describe('khôi phục nháp cũ có dòng phí (13/10/2026)', () => {
     expect(migrateDraftLine('carton', cu as Line).fee).toBe(true)
     expect(migrateDraftLine('wood', cu as Line).fee).toBe(false)
     expect(migrateDraftLine('wood', { ...cu, fee: true } as Line).fee).toBe(true)
+  })
+})
+
+describe('cartonPriceWarn — m² × giá/m² phải khớp đơn giá (PO-2026-0280, 18/11/2026)', () => {
+  // Dòng "Bao bì thùng bàn 70" Hiệp Hưng: tờ NCC 1,79 m² × 16.900 = 30.251/thùng.
+  const thung = (o: Partial<PoLineDto> = {}) =>
+    lineFromPo({
+      ...base,
+      qty_ordered: 230,
+      unit_price: 30_251,
+      open_style: 'AD',
+      inner_l_mm: 725,
+      inner_w_mm: 725,
+      inner_h_mm: 100,
+      area_m2: 1.79,
+      price_per_m2: 16_900,
+      carton_basis: 'ctn',
+      ...o,
+    })
+
+  it('khớp → không nói gì', () => {
+    expect(cartonPriceWarn('carton', thung())).toBeNull()
+  })
+
+  it('lọt lòng ghi cm vào ô mm (m² 0,0212) → nghi cm', () => {
+    const w = cartonPriceWarn('carton', thung({ inner_l_mm: 72.5, inner_w_mm: 72.5, inner_h_mm: 10, area_m2: 0.0212 })) // prettier-ignore
+    expect(w?.text).toBe('m²×giá/m² = 358 · ghi cm?')
+    expect(w?.why).toContain('MM')
+  })
+
+  it('m² chép nhầm của dòng khác (lệch ~80%) → báo % lệch, không nghi cm', () => {
+    const w = cartonPriceWarn('carton', thung({ area_m2: 3.25 }))
+    expect(w?.text).toBe('m²×giá/m² = 54.925 (lệch 82%)')
+    expect(w?.why).not.toContain('MM')
+  })
+
+  it('ĐK có giá/m² mà trống m² → nhắc gõ m²', () => {
+    const w = cartonPriceWarn('carton', thung({ open_style: 'ĐK', area_m2: null }))
+    expect(w?.text).toBe('thiếu m²/thùng')
+  })
+
+  it('lệch nhỏ (công thức m² NCC khác ~13%) và m² tem nhỏ làm tròn → im', () => {
+    expect(cartonPriceWarn('carton', thung({ area_m2: 1.56 }))).toBeNull()
+    // PO-2026-0089: 0,0036 m² × 133.600 = 481 vs 550 — sai số làm tròn 4 số lẻ.
+    expect(cartonPriceWarn('carton', thung({ area_m2: 0.0036, price_per_m2: 133_600, unit_price: 550 }))).toBeNull() // prettier-ignore
+  })
+
+  it('bản in cộng vào giá thùng; không có giá/m² hoặc mẫu khác → im', () => {
+    expect(cartonPriceWarn('carton', thung({ area_m2: 3.591, price_per_m2: 18_770, print_fee: 3_278, unit_price: 70_681 }))).toBeNull() // prettier-ignore
+    expect(cartonPriceWarn('carton', thung({ price_per_m2: null }))).toBeNull()
+    expect(cartonPriceWarn('glass', thung({ area_m2: 0.0212 }))).toBeNull()
   })
 })

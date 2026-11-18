@@ -2,6 +2,7 @@
 
 import {
   cartonPriceSuggest,
+  cartonPriceWarn,
   HAI_GIA,
   lineAmount,
   lineBasis,
@@ -406,7 +407,10 @@ export function DongHang({ d }: { d: DonCtx }) {
                           })()}
                           {(() => {
                             // Mẫu bao bì tính theo m²: máy dựng sẵn giá thùng
-                            // để người mua đối chiếu với giá NCC chào.
+                            // để người mua đối chiếu với giá NCC chào. Lệch xa
+                            // (lọt lòng ghi cm…) thì CẢNH BÁO, không mời bấm.
+                            const canh = cartonPriceWarn(template, l)
+                            if (canh) return <CellHint tone="warn" title={canh.why}>⚠ {canh.text}</CellHint> // prettier-ignore
                             const goi = cartonPriceSuggest(template, l)
                             if (goi == null || goi <= 0 || Number(l.price) === goi) return null // prettier-ignore
                             return (

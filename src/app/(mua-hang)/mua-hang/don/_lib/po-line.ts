@@ -355,6 +355,52 @@ export function cartonPriceSuggest(t: PoTemplate, l: Line): number | null {
 }
 
 /**
+ * m²/thùng × đơn giá/m² (+ bản in) có KHỚP đơn giá đang ghi không — trả câu cảnh
+ * báo NGẮN (ô gợi ý không xuống dòng) + lời giải thích cho tooltip; khớp / chưa đủ
+ * số thì null. Chỉ CẢNH BÁO, không chặn lưu: tiền vẫn là SL ×
+ * đơn giá, nhưng phiếu in bày cả ba số cạnh nhau nên lệch là NCC đọc thấy ngay.
+ *
+ * Lỗi 18/11/2026 (PO-2026-0280 Hiệp Hưng): lọt lòng ghi theo cm (72.5×72.5×10) vào
+ * ô mm → m² 0,0212 thay vì 1,79; phiếu in bày 0,0212 × 16.900 cạnh đơn giá 30.251,
+ * còn gợi ý "dùng 358 ↩" mời bấm một giá sai 85 lần. Hai dòng ĐK có giá/m² mà
+ * trống m² (ĐK máy không tự tính). Đo 71 dòng bao bì cũ: 67 lệch < 1%, 4 dòng còn
+ * lại ≤ 13% (m² tem nhỏ làm tròn 4 số lẻ) → ngưỡng 20% (+ sai số làm tròn m²)
+ * không báo nhầm dòng nào. Lệch cỡ 1/100 là dấu hiệu cm ↔ mm (×10 mỗi chiều).
+ */
+export function cartonPriceWarn(
+  t: PoTemplate,
+  l: Line,
+): { text: string; why: string } | null {
+  if (t !== 'carton' || l.carton_basis !== 'ctn' || l.fee) return null
+  const area = Number(l.area_m2) || 0
+  const perM2 = Number(l.price_per_m2) || 0
+  if (perM2 <= 0) return null
+  if (area <= 0) {
+    return {
+      text: 'thiếu m²/thùng',
+      why: 'Có đơn giá/m² mà chưa có m²/thùng — phiếu in bày giá/m² cạnh ô m² trống. Cách mở ĐK máy không tự tính: gõ m² theo NCC.',
+    }
+  }
+  const price = Number(l.price) || 0
+  if (price <= 0) return null
+  const calc = area * perM2 + (Number(l.print_fee) || 0)
+  const ratio = calc / price
+  if (Math.abs(ratio - 1) <= 0.2 + 0.00005 / area) return null
+  const vi = (x: number) => Math.round(x).toLocaleString('vi-VN')
+  const pct = Math.round(Math.abs(ratio - 1) * 100)
+  const base = `m²/thùng ${area.toLocaleString('vi-VN', { maximumFractionDigits: 6 })} × đơn giá/m² ${vi(perM2)} = ${vi(calc)}, lệch ${pct}% đơn giá ${vi(price)} — phiếu in bày cả ba số cạnh nhau.`
+  return ratio < 0.05
+    ? {
+        text: `m²×giá/m² = ${vi(calc)} · ghi cm?`,
+        why: `${base} Lọt lòng tính bằng MM — thùng dài 72,5 cm ghi 725, không ghi 72.5.`,
+      }
+    : {
+        text: `m²×giá/m² = ${vi(calc)} (lệch ${pct}%)`,
+        why: `${base} Kiểm lại m²/thùng theo NCC.`,
+      }
+}
+
+/**
  * Đọc quy cách "900×605×115 mm" / "940*940*90" / "900x605x115" → [D, R, C].
  *
  * Bao bì trong danh mục ghi lọt lòng ngay trong ô Quy cách, còn mẫu carton lại
