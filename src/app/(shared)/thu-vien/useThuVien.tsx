@@ -46,7 +46,7 @@ export function useThuVien({
 
   /** Chip/ô bật-tắt: bấm lại giá trị đang bật thì bỏ. */
   const lat = (k: 'thieu', v: string) => doiLoc({ [k]: filters[k] === v ? '' : v })
-  const latCo = (k: 'kt' | 'lenh' | 'mau' | 'gia') =>
+  const latCo = (k: 'kt' | 'lenh' | 'mau' | 'the' | 'gia') =>
     doiLoc({ [k]: filters[k] ? '' : '1' })
 
   const dangLoc =
@@ -58,6 +58,7 @@ export function useThuVien({
     filters.kt ||
     filters.lenh ||
     filters.mau ||
+    filters.the ||
     filters.gia ||
     filters.tt !== 'active'
   const boLoc = () =>
@@ -70,6 +71,7 @@ export function useThuVien({
       kt: '',
       lenh: '',
       mau: '',
+      the: '',
       gia: '',
       tt: '',
       trang: '1',
@@ -256,6 +258,8 @@ export function useThuVien({
     cloneCode,
     guiNhanBan,
     menu,
+    /** Được tick mẫu showroom trên dòng (0303). */
+    canEdit,
   } as const
 }
 

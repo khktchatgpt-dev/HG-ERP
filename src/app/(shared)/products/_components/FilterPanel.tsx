@@ -8,6 +8,8 @@ import {
   ImageOff,
   Lock,
   PencilRuler,
+  Store,
+  Tag,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -184,6 +186,28 @@ export function FilterPanel({
             icon={ImageOff}
             iconClass="text-zinc-400"
             onClick={() => onToggle('image', 'missing')}
+          />
+        </div>
+      </Field>
+
+      {/* 0303 — phiếu 101026: mẫu nào đã có ở showroom, mẫu nào chưa treo thẻ. */}
+      <Field label="Mẫu showroom">
+        <div className="flex flex-wrap gap-1.5">
+          <Chip
+            active={filters.showroom === 'co'}
+            label="Có mẫu"
+            count={counts.showroom_co}
+            icon={Store}
+            iconClass="text-sky-600"
+            onClick={() => onToggle('showroom', 'co')}
+          />
+          <Chip
+            active={filters.showroom === 'chua_the'}
+            label="Chưa treo thẻ"
+            count={counts.showroom_chua_the}
+            icon={Tag}
+            iconClass="text-amber-600"
+            onClick={() => onToggle('showroom', 'chua_the')}
           />
         </div>
       </Field>

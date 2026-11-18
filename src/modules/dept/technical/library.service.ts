@@ -37,8 +37,10 @@ export type LibraryFilters = {
   tt: 'active' | 'inactive' | 'all'
   /** Đang nằm trên ≥1 lệnh SX chưa xong. */
   lenh: boolean
-  /** Có hiện vật mẫu. */
+  /** Có mẫu ở showroom (ô tick 0303). */
   mau: boolean
+  /** Có mẫu nhưng CHƯA treo thẻ (0303, phiếu 101026). */
+  the?: boolean
   /** Chưa có giá kế hoạch — chỉ có nghĩa khi người xem được thấy giá. */
   gia: boolean
   page: number
@@ -51,6 +53,8 @@ export type LibraryCounts = {
   kt: number
   lenh: number
   mau: number
+  /** Có mẫu chưa treo thẻ (0303). */
+  the: number
   gia: number
   /** SP ngừng dùng trong tập khách/loại/khung đang lọc — số trên ô "Trạng thái". */
   ngung: number
@@ -89,6 +93,9 @@ export type LibraryRow = {
   is_set: boolean
   is_active: boolean
   locked_at: string | null
+  /** Mẫu showroom (0303) — hai ô tick ở cột "Mẫu" của bảng. */
+  showroom_sample: boolean
+  showroom_tagged_at: string | null
   bom_status: 'none' | 'drawing' | 'done'
   parts: number
   check: HoSoCheck
@@ -110,11 +117,12 @@ export type Flag = LibFlagRow & {
 }
 
 export async function loadFlags(): Promise<Map<string, Flag>> {
-  const [rows, parts, packing, samples, lsx, docs] = await Promise.all([
+  // Mẫu showroom = ô tick trên hồ sơ SP (0303, phiếu 101026), không đếm bảng
+  // hiện vật mẫu (technical_samples) nữa — một nguồn cho thư viện, hồ sơ, /products.
+  const [rows, parts, packing, lsx, docs] = await Promise.all([
     libraryRepo.flagRows(),
     libraryRepo.partsCountByProduct(),
     libraryRepo.packingByProduct(),
-    libraryRepo.sampleProductIds(),
     libraryRepo.lsxByProduct(),
     filesRepo.productDocFlags(),
   ])
@@ -133,14 +141,14 @@ export async function loadFlags(): Promise<Map<string, Flag>> {
       has_dims: !!(r.length_mm && r.width_mm && r.height_mm),
       lsx_open: l?.open ?? 0,
       lsx_total: l?.total ?? 0,
-      has_sample: samples.has(r.id),
+      has_sample: r.showroom_sample,
       check: hoSoCheck({
         has_parts: n > 0,
         has_drawing: drawing.has(r.id),
         has_image: !!r.image_file_id,
         has_packing: !!pk || !!r.carton_l_cm,
         has_loading: !!loading && loading > 0,
-        has_sample: samples.has(r.id),
+        has_sample: r.showroom_sample,
         bom_required: bomRequiredFor(r.product_type),
       }),
     })
@@ -167,6 +175,7 @@ function matchSets(f: Flag, o: LibraryFilters): boolean {
   if (o.kt && f.has_dims) return false
   if (o.lenh && f.lsx_open === 0) return false
   if (o.mau && !f.has_sample) return false
+  if (o.the && !(f.showroom_sample && !f.showroom_tagged_at)) return false
   if (o.gia && f.plan_price != null) return false
   return true
 }
@@ -194,6 +203,8 @@ function toRow(
     is_set: p.is_set,
     is_active: p.is_active,
     locked_at: p.locked_at,
+    showroom_sample: p.showroom_sample,
+    showroom_tagged_at: p.showroom_tagged_at,
     bom_status: p.bom_status,
     parts: f?.parts ?? 0,
     // Cờ đọc trước trang; SP vừa tạo giữa hai nhịp thì chấm như SP mới tinh.
@@ -244,6 +255,7 @@ export const libraryService = {
       kt: 0,
       lenh: 0,
       mau: 0,
+      the: 0,
       gia: 0,
       ngung: [...flags.values()].filter((f) => matchAttrs(f, { ...o, tt: 'inactive' }))
         .length,
@@ -255,11 +267,12 @@ export const libraryService = {
       if (!f.has_dims) counts.kt++
       if (f.lsx_open > 0) counts.lenh++
       if (f.has_sample) counts.mau++
+      if (f.showroom_sample && !f.showroom_tagged_at) counts.the++
       if (f.plan_price == null) counts.gia++
     }
 
     // ── lấy trang: lọc TẬP (thiếu/kt/lệnh/mẫu/giá) tính ở app → đưa id xuống DB ──
-    const setFilterOn = !!o.thieu || o.kt || o.lenh || o.mau || o.gia
+    const setFilterOn = !!o.thieu || o.kt || o.lenh || o.mau || o.the || o.gia
     const ids = setFilterOn
       ? base.filter((f) => matchSets(f, o)).map((f) => f.id)
       : undefined

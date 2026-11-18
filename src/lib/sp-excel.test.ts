@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   columnForHeader,
+  currentValue,
   optionCode,
   parseVnNum,
   planRows,
@@ -39,6 +40,8 @@ const keros: ExistingSp = {
   description_en: null,
   notes: null,
   is_active: true,
+  showroom_sample: true,
+  showroom_tagged_at: '2026-11-17T17:30:00Z',
   locked_at: null,
   updated_at: '2026-10-08T00:00:00Z',
   image_file_id: 'f1',
@@ -48,6 +51,36 @@ const row = (cells: RawRow['cells'], extra?: Partial<RawRow>): RawRow => ({
   row: 4,
   cells,
   ...extra,
+})
+
+describe('sp-excel · cột mẫu showroom (0303, chỉ xem)', () => {
+  it('xuất "có" + ngày treo thẻ theo giờ VN', () => {
+    expect(currentValue(keros, 'showroom_sample')).toBe('có')
+    // 17/11 17:30 UTC = 18/11 0h30 giờ VN
+    expect(currentValue(keros, 'showroom_tagged_at')).toBe('18/11/2026')
+    expect(
+      currentValue(
+        { ...keros, showroom_sample: false, showroom_tagged_at: null },
+        'showroom_tagged_at',
+      ),
+    ).toBeNull()
+  })
+
+  it('đọc lại file: gõ vào hai cột này KHÔNG ghi gì (tick trên ERP)', () => {
+    const plan = planRows(
+      [
+        row({
+          code: 'CH0195HG-IN',
+          name: 'Ghế 5 bậc Keros',
+          showroom_sample: 'không',
+          showroom_tagged_at: '01/01/2026',
+        }),
+      ],
+      [keros],
+    )
+    expect(plan.rows[0].action).toBe('unchanged')
+    expect(plan.rows[0].write).toEqual({})
+  })
 })
 
 describe('sp-excel', () => {

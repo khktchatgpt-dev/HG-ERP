@@ -20,6 +20,7 @@ import {
   type ThuVienFilters,
 } from './thu-vien.shared'
 import { useThuVien } from './useThuVien'
+import { useXuatExcel } from '@/components/technical/useXuatExcel'
 
 /**
  * THƯ VIỆN SẢN PHẨM — khuôn C · Danh sách, dựng ĐÚNG artboard "Màn 1" trên
@@ -67,6 +68,7 @@ function excelQuery(f: ThuVienFilters): string {
   p.set('tt', f.tt)
   if (f.lenh) p.set('lenh', '1')
   if (f.mau) p.set('mau', '1')
+  if (f.the) p.set('the', '1')
   return p.toString()
 }
 
@@ -92,15 +94,21 @@ export function ThuVienScreen({
   canPrice: boolean
 }) {
   const d = useThuVien({ filters, canEdit })
+  const xe = useXuatExcel()
   const soTrang = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const tu = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const den = Math.min(page * PAGE_SIZE, total)
   const locTap =
-    !!filters.thieu || filters.kt || filters.lenh || filters.mau || filters.gia
+    !!filters.thieu ||
+    filters.kt ||
+    filters.lenh ||
+    filters.mau ||
+    filters.the ||
+    filters.gia
 
   return (
     <>
-      <TopProgressBar active={d.busy || d.dangChay} />
+      <TopProgressBar active={d.busy || d.dangChay || xe.busy} />
       <header className="head">
         <div className="head-l">
           <span className="eyebrow">Dùng chung</span>
@@ -109,7 +117,9 @@ export function ThuVienScreen({
             label="SP"
             n={counts.total}
             on={!locTap}
-            onClick={() => d.doiLoc({ thieu: '', kt: '', lenh: '', mau: '', gia: '' })}
+            onClick={() =>
+              d.doiLoc({ thieu: '', kt: '', lenh: '', mau: '', the: '', gia: '' })
+            }
           />
           <Fact
             label="Thiếu định mức"
@@ -156,16 +166,27 @@ export function ThuVienScreen({
         {canEdit && (
           <div className="head-r">
             <details className="dd">
-              <summary className="btn" title="Thêm / cập nhật SP bằng file Excel">
+              <summary
+                className="btn"
+                title="Thêm / cập nhật SP bằng file Excel"
+                aria-busy={xe.busy}
+              >
                 <FileSpreadsheet size={14} aria-hidden />
-                <span className="t">Excel</span> ▾
+                <span className="t">{xe.busy ? 'Đang tạo file…' : 'Excel'}</span> ▾
               </summary>
               <div className="dd-m">
                 <a href={`${EXPORT_URL}?blank=1`}>Tải file mẫu trống</a>
                 <a
-                  href={`/api/dept/technical/products/sp-excel/export?${excelQuery(filters)}`}
+                  href={`${EXPORT_URL}?${excelQuery(filters)}`}
+                  aria-disabled={xe.busy}
+                  onClick={(e) => {
+                    // Gọi qua hook để bày "Đang tạo file…" + chặn bấm lại (~20 giây).
+                    e.preventDefault()
+                    e.currentTarget.closest('details')?.removeAttribute('open')
+                    void xe.xuat(`${EXPORT_URL}?${excelQuery(filters)}`)
+                  }}
                 >
-                  Xuất SP đang lọc (kèm ảnh)
+                  {xe.busy ? 'Đang tạo file…' : 'Xuất SP đang lọc (kèm ảnh)'}
                 </a>
                 <Link href="/thu-vien/nhap-excel">Nhập file đã sửa…</Link>
               </div>
@@ -191,6 +212,16 @@ export function ThuVienScreen({
           </div>
         )}
       </header>
+      {/* Xuất Excel đang chạy / xong / lỗi — báo TẠI CHỖ, không để màn đứng im. */}
+      {(xe.busy || xe.err || xe.xong != null) && (
+        <div className={xe.err ? "notice red" : "notice"} role="status">
+          {xe.busy
+            ? "Đang tạo file Excel kèm ảnh — khoảng 20 giây cho cả thư viện, đừng bấm lại."
+            : xe.err
+              ? xe.err
+              : `Đã tạo file ${xe.xong} SP — trình duyệt đang tải về (xem thư mục Tải xuống).`}
+        </div>
+      )}
 
       <div className="filters">
         <label htmlFor="tv-q" className="sr">
@@ -293,6 +324,15 @@ export function ThuVienScreen({
           onClick={() => d.latCo('mau')}
         >
           Có mẫu <span className="n">{counts.mau}</span>
+        </button>
+        <button
+          type="button"
+          className={cn('chip', filters.the && 'on')}
+          aria-pressed={filters.the}
+          onClick={() => d.latCo('the')}
+          title="Có mẫu ở showroom nhưng chưa treo thẻ (phiếu 101026)"
+        >
+          Chưa treo thẻ <span className="n">{counts.the}</span>
         </button>
         {d.dangLoc && (
           <button type="button" className="btn" onClick={d.boLoc}>

@@ -169,21 +169,26 @@ export const ACTIONS: Action[] = [
   },
   /*
    * GIÁ THÀNH KẾ HOẠCH (0220) là SỐ RIÊNG của Bán hàng — bí mật công ty (chủ dự
-   * án 02/10/2026). KHÔNG đi theo quyền xem SP: chỉ Bán hàng, Kỹ thuật (người
-   * lập bảng tính) và Ban Giám đốc (đọc ở Tiền theo lệnh) thấy; các cột plan_*
-   * không nằm trong `Product` của hồ sơ dùng chung nên API hồ sơ không trả ra.
+   * án 02/10/2026). KHÔNG đi theo quyền xem SP: chỉ Bán hàng và Ban Giám đốc
+   * (đọc ở Tiền theo lệnh) thấy; các cột plan_* không nằm trong `Product` của
+   * hồ sơ dùng chung nên API hồ sơ không trả ra.
+   *
+   * 18/11/2026 chủ dự án thấy cột "Giá bán KH" ở Thư viện SP (mới) của Kỹ thuật:
+   * "giá chỉ bên sale thôi" → BỎ nhánh `technical.edit` khỏi cả xem lẫn nạp/sửa
+   * (trước đó Kỹ thuật được thấy vì là người lập bảng tính). Kỹ thuật hết thấy
+   * cột giá, chip "Chưa giá bán KH", ô giá trên hồ sơ mới và /sales/gia-thanh.
    */
   {
     key: 'technical.plan_cost.view',
     label: 'Xem giá thành kế hoạch của SP',
     domain: 'technical',
-    rule: anyOf(perm('sales.member'), perm('technical.edit'), perm('exec.tower.view')),
+    rule: anyOf(perm('sales.member'), perm('exec.tower.view')),
   },
   {
     key: 'technical.plan_cost.manage',
     label: 'Nạp / sửa giá thành kế hoạch của SP',
     domain: 'technical',
-    rule: anyOf(perm('sales.member'), perm('technical.edit')),
+    rule: perm('sales.member'),
   },
   {
     key: 'technical.product.update',

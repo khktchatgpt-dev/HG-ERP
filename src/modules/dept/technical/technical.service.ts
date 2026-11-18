@@ -328,6 +328,8 @@ export const productsService = {
       sort?: 'created' | 'updated'
       /** Mã vật liệu khung ('AL', 'IR'…) — thư viện 08/10/2026. */
       frame_material?: string
+      /** Mẫu showroom (0303): có mẫu / có mẫu chưa treo thẻ / chưa có mẫu. */
+      showroom?: 'co' | 'chua_the' | 'khong'
       /** Chỉ các id này (lọc tập tính ở `library.service`); mảng rỗng = 0 dòng. */
       ids?: string[]
       page: number
@@ -670,6 +672,37 @@ export const productsService = {
    * dùng vẫn làm được ở tab Tài liệu, nhưng là TIỆN ÍCH riêng, không phải
    * điều kiện — hồ sơ chưa kịp chỉ file vẫn chốt được.
    */
+  /**
+   * Tick mẫu showroom trên danh sách / hồ sơ SP (0303, phiếu 101026 PKD): có mẫu
+   * ở showroom không, đã treo thẻ chưa. Không phải thông số SP nên KHÔNG chặn
+   * theo khoá hồ sơ (0140) — mẫu được mang ra, thẻ được treo sau khi hồ sơ chốt.
+   * Treo thẻ ⇒ có mẫu; bỏ "có mẫu" ⇒ bỏ luôn thẻ.
+   */
+  async setShowroom(
+    user: User,
+    id: string,
+    input: { co_mau?: boolean; treo_the?: boolean },
+  ): Promise<Pick<Product, 'showroom_sample' | 'showroom_tagged_at'>> {
+    await assertAction(user, 'technical.product.update')
+    const before = await productsRepo.findById(id)
+    if (!before) throw NotFound('Không tìm thấy sản phẩm')
+    let coMau = input.co_mau ?? before.showroom_sample
+    let tagged = before.showroom_tagged_at
+    if (input.treo_the === true) {
+      coMau = true
+      tagged = tagged ?? new Date().toISOString()
+    } else if (input.treo_the === false) tagged = null
+    if (!coMau) tagged = null
+    const after = await productsRepo.patch(id, {
+      showroom_sample: coMau,
+      showroom_tagged_at: tagged,
+    })
+    return {
+      showroom_sample: after.showroom_sample,
+      showroom_tagged_at: after.showroom_tagged_at,
+    }
+  },
+
   async lock(user: User, id: string, note?: string | null): Promise<Product> {
     await assertAction(user, 'technical.product.lock')
     const before = await productsRepo.findById(id)

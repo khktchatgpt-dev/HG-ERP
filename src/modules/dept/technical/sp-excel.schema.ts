@@ -43,5 +43,12 @@ export const spExcelExportQuerySchema = z.object({
   tt: z.string().optional(),
   lenh: z.string().optional(),
   mau: z.string().optional(),
+  /** Có mẫu chưa treo thẻ (0303) — chip của /thu-vien. */
+  the: z.string().optional(),
+  /**
+   * Mẫu showroom (0303) — nút Xuất ở `/products`: `co` = có mẫu, `chua_the` =
+   * có mẫu chưa treo thẻ.
+   */
+  showroom: z.enum(['co', 'chua_the']).optional(),
 })
 export type SpExcelExportQuery = z.infer<typeof spExcelExportQuerySchema>

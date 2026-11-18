@@ -257,3 +257,29 @@ describe('canDo — vật tư: Cung ứng thêm + ngừng dùng/xoá, trường 
     expect(canDo(byKey('warehouse.material.create'), production)).toBe(false)
   })
 })
+
+/**
+ * Giá thành / giá bán kế hoạch là SỐ RIÊNG của Bán hàng (02/10/2026). 18/11/2026
+ * chủ dự án: "giá chỉ bên sale thôi" — Kỹ thuật KHÔNG còn thấy, KHÔNG nạp/sửa.
+ */
+describe('canDo — giá kế hoạch: chỉ Bán hàng + BGĐ', () => {
+  const byKey = (k: string) => ACTIONS.find((a) => a.key === k) as Action
+  const ctxOf = (keys: string[]) => ({ role: 'employee' as const, has: has(keys) })
+  const sales = ctxOf(['sales.member', 'technical.bom.edit', 'technical.edit'])
+  const technical = ctxOf(['technical.member', 'technical.edit', 'technical.bom.edit'])
+  const bgd = ctxOf(['exec.tower.view', 'technical.edit'])
+  const view = byKey('technical.plan_cost.view')
+  const manage = byKey('technical.plan_cost.manage')
+
+  it('Bán hàng xem + nạp được; BGĐ chỉ xem', () => {
+    expect(canDo(view, sales)).toBe(true)
+    expect(canDo(manage, sales)).toBe(true)
+    expect(canDo(view, bgd)).toBe(true)
+    expect(canDo(manage, bgd)).toBe(false)
+  })
+
+  it('Kỹ thuật (có technical.edit) KHÔNG xem, KHÔNG nạp', () => {
+    expect(canDo(view, technical)).toBe(false)
+    expect(canDo(manage, technical)).toBe(false)
+  })
+})

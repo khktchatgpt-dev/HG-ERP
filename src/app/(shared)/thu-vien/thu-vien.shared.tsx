@@ -32,6 +32,8 @@ export type ThuVienFilters = {
   tt: 'active' | 'inactive' | 'all'
   lenh: boolean
   mau: boolean
+  /** Có mẫu chưa treo thẻ (0303). */
+  the: boolean
   gia: boolean
 }
 

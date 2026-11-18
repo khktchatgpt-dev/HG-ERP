@@ -9114,6 +9114,7 @@ export type Database = {
           set_contents: string | null
           shipping_mark: string | null
           showroom_sample: boolean
+          showroom_tagged_at: string | null
           stage_route: Json | null
           tech_spec: Json
           thickness_mm: number | null
@@ -9201,6 +9202,7 @@ export type Database = {
           set_contents?: string | null
           shipping_mark?: string | null
           showroom_sample?: boolean
+          showroom_tagged_at?: string | null
           stage_route?: Json | null
           tech_spec?: Json
           thickness_mm?: number | null
@@ -9288,6 +9290,7 @@ export type Database = {
           set_contents?: string | null
           shipping_mark?: string | null
           showroom_sample?: boolean
+          showroom_tagged_at?: string | null
           stage_route?: Json | null
           tech_spec?: Json
           thickness_mm?: number | null
@@ -9530,6 +9533,8 @@ export type Database = {
         Row: {
           acquired_at: string | null
           category: string | null
+          checked_at: string | null
+          checked_by: string | null
           code: string
           condition: string
           created_at: string
@@ -9540,13 +9545,17 @@ export type Database = {
           name: string | null
           note: string | null
           product_id: string | null
+          ref_code: string | null
           source: string | null
           status: string
+          tagged_at: string | null
           updated_at: string
         }
         Insert: {
           acquired_at?: string | null
           category?: string | null
+          checked_at?: string | null
+          checked_by?: string | null
           code: string
           condition?: string
           created_at?: string
@@ -9557,13 +9566,17 @@ export type Database = {
           name?: string | null
           note?: string | null
           product_id?: string | null
+          ref_code?: string | null
           source?: string | null
           status?: string
+          tagged_at?: string | null
           updated_at?: string
         }
         Update: {
           acquired_at?: string | null
           category?: string | null
+          checked_at?: string | null
+          checked_by?: string | null
           code?: string
           condition?: string
           created_at?: string
@@ -9574,11 +9587,20 @@ export type Database = {
           name?: string | null
           note?: string | null
           product_id?: string | null
+          ref_code?: string | null
           source?: string | null
           status?: string
+          tagged_at?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "technical_samples_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "technical_samples_created_by_fkey"
             columns: ["created_by"]

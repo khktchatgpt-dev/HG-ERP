@@ -54,6 +54,8 @@ export type Product = {
   shipping_mark: string | null
   barcode: string | null
   showroom_sample: boolean
+  /** Ngày treo thẻ showroom (0303). */
+  showroom_tagged_at: string | null
   reference_price: number | null
   tech_spec: TechSpec
   // Thông tin XK + đặc tính nội thất (0037).
@@ -96,6 +98,9 @@ export type ProductRow = Pick<
   /** TRẠNG THÁI hồ sơ (0145) — badge trên thẻ/bảng, và bộ lọc ở thanh trên. */
   | 'lifecycle'
   | 'is_active'
+  /** Mẫu showroom (0303) — hai cột tick ở chế độ bảng. */
+  | 'showroom_sample'
+  | 'showroom_tagged_at'
 > & {
   has_drawing: boolean
   has_bom: boolean
@@ -115,6 +120,8 @@ export type ProductCounts = {
   no_image: number
   /** Hồ sơ đã khoá (0140). */
   locked: number
+  showroom_co: number
+  showroom_chua_the: number
 }
 
 export type Filters = {
@@ -132,10 +139,12 @@ export type Filters = {
   type: string
   /** Mã danh mục SP, `NO_CATEGORY` = chưa phân loại, hoặc 'all'. */
   category: string
+  /** Mẫu showroom (0303): 'co' | 'chua_the' | 'all'. */
+  showroom: string
 }
 
 /** Bộ lọc bật/tắt được bằng chip — bấm lại giá trị đang bật thì bỏ lọc đó. */
-export type ToggleFilterKey = 'bom' | 'status' | 'image' | 'locked'
+export type ToggleFilterKey = 'bom' | 'status' | 'image' | 'locked' | 'showroom'
 
 /** Nhãn khách/nhóm đã dùng + số SP — đổ vào dropdown lọc & ô gợi ý. */
 export type CustomerNameOption = { name: string; count: number }

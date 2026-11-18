@@ -34,6 +34,7 @@ import { HoSoThanhPhan } from './ho-so-thanh-phan'
 import { HoSoPhieu } from './ho-so-phieu'
 import { dmyShort, nz, type HoSoView } from './ho-so.shared'
 import { useHoSo } from './useHoSo'
+import { ShowroomTicks } from '@/components/technical/ShowroomTicks'
 
 type Tab = 'dinh-muc' | 'dong-goi' | 'thanh-phan' | 'tai-lieu' | 'lich-su'
 
@@ -344,14 +345,30 @@ export function HoSoScreen({
               </span>
             </div>
           )}
+          {/* Mẫu showroom (0303, phiếu 101026) — tick ngay tại ô, không cần chế độ sửa,
+              không bị khoá hồ sơ chặn. */}
           <div className="stat">
             <span className={cn('ic', d.hasSample ? 'ok' : 'gray')}>
               <Box aria-hidden />
             </span>
             <span>
-              <span className="l">Mẫu</span>
-              <b>{d.hasSample ? 'Có' : 'Chưa làm'}</b>
-              <small>{d.hasSample ? 'hiện vật chưa thanh lý' : 'chưa có hiện vật'}</small>
+              <span className="l">Mẫu showroom</span>
+              <b>
+                {!d.hasSample
+                  ? 'Chưa có'
+                  : d.taggedAt
+                    ? `Có · treo thẻ ${dmyShort(d.taggedAt)}`
+                    : 'Có · chưa treo thẻ'}
+              </b>
+              <small>
+                <ShowroomTicks
+                  productId={d.id}
+                  coMau={d.hasSample}
+                  taggedAt={d.taggedAt}
+                  canEdit={canEdit}
+                  compact
+                />
+              </small>
             </span>
           </div>
         </div>

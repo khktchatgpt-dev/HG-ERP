@@ -88,6 +88,7 @@ export function toHoSoView(d: HoSoData) {
     packingDefault: d.packing.find((o) => o.is_default) ?? d.packing[0] ?? null,
     files: d.files,
     hasSample: d.hasSample,
+    taggedAt: d.taggedAt,
     check: d.check,
     diem: d.diem,
     thieuSo: d.thieuSo,

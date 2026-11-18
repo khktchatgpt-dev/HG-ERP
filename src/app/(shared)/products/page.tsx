@@ -42,6 +42,9 @@ export default async function TechnicalProductsPage({
   // Mã danh mục SP (catalog_items) hoặc '__uncategorized'. Không kiểm mã ở đây:
   // catalog có thể đổi, mã lạ chỉ ra 0 dòng chứ không gây lỗi.
   const category = str(spRaw.category) || 'all'
+  // Mẫu showroom (0303): 'co' = có mẫu, 'chua_the' = có mẫu chưa treo thẻ.
+  const showroomRaw = str(spRaw.showroom)
+  const showroom = showroomRaw === 'co' || showroomRaw === 'chua_the' ? showroomRaw : 'all'
   const page = Math.max(1, Number(str(spRaw.page)) || 1)
   // Lối tắt "Vừa sửa gần đây" ở màn mở đầu — không phải bộ lọc, chỉ đổi thứ tự.
   const recent = str(spRaw.recent) === '1'
@@ -69,7 +72,8 @@ export default async function TechnicalProductsPage({
     locked !== 'all' ||
     lifecycle !== 'all' ||
     type !== 'all' ||
-    category !== 'all'
+    category !== 'all' ||
+    showroom !== 'all'
   // `idle` nay chỉ còn nghĩa "chưa thu hẹp gì" — dùng để bày hàng lối tắt phía
   // trên lưới, KHÔNG còn dùng để chặn truy vấn.
   const idle = !filtering && !recent
@@ -85,6 +89,7 @@ export default async function TechnicalProductsPage({
     lifecycle: lifecycle === 'all' ? undefined : lifecycle,
     product_type: type === 'all' ? undefined : type,
     category: category === 'all' ? undefined : category,
+    showroom: showroom === 'all' ? undefined : showroom,
     sort: recent ? 'updated' : 'created',
     page,
     page_size: PAGE_SIZE,
@@ -147,6 +152,8 @@ export default async function TechnicalProductsPage({
         locked_at: p.locked_at,
         lifecycle: p.lifecycle,
         is_active: p.is_active,
+        showroom_sample: p.showroom_sample,
+        showroom_tagged_at: p.showroom_tagged_at,
         has_drawing: docFlags[p.id]?.drawing ?? false,
         has_bom: docFlags[p.id]?.bom ?? false,
         // Phương án đóng gói thật; jsonb chỉ là ô tóm tắt nhập tay nên đứng sau.
@@ -169,6 +176,7 @@ export default async function TechnicalProductsPage({
         lifecycle,
         type,
         category,
+        showroom,
       }}
       customerNames={customerNames}
       categories={categories}

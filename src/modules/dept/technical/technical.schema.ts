@@ -167,6 +167,13 @@ export const productUpdateSchema = productCreateSchema.partial().extend({
  * bản BOM ở tab Tài liệu. Cột `bom_file_id` giữ nguyên trong DB (không mất dữ
  * liệu của hồ sơ đã trỏ), chỉ là không còn đường ghi từ giao diện.
  */
+/** Tick mẫu showroom (0303): có mẫu / đã treo thẻ — gửi ô nào đổi thì ô đó. */
+export const productShowroomSchema = z
+  .object({ co_mau: z.boolean().optional(), treo_the: z.boolean().optional() })
+  .refine((v) => v.co_mau !== undefined || v.treo_the !== undefined, {
+    message: 'Không có gì để đổi',
+  })
+
 export const productLockSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
 })

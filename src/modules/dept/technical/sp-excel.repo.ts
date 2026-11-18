@@ -29,12 +29,14 @@ type Row = {
   description_en: string | null
   notes: string | null
   is_active: boolean
+  showroom_sample: boolean
+  showroom_tagged_at: string | null
   locked_at: string | null
   updated_at: string
   image_file_id: string | null
 }
 const COLS =
-  'id, code, name, product_type, frame_material, name_foreign, customer_name, customer_item_code, unit, length_mm, width_mm, height_mm, net_weight_kg, actual_weight_kg, material, tech_spec, packing, barcode, description_en, notes, is_active, locked_at, updated_at, image_file_id'
+  'id, code, name, product_type, frame_material, name_foreign, customer_name, customer_item_code, unit, length_mm, width_mm, height_mm, net_weight_kg, actual_weight_kg, material, tech_spec, packing, barcode, description_en, notes, is_active, showroom_sample, showroom_tagged_at, locked_at, updated_at, image_file_id'
 
 type OptRow = {
   id: string
@@ -132,6 +134,8 @@ function toExisting(r: Row, def: DefaultPacking | undefined): ExistingSp {
     description_en: r.description_en,
     notes: r.notes,
     is_active: r.is_active,
+    showroom_sample: r.showroom_sample,
+    showroom_tagged_at: r.showroom_tagged_at,
     locked_at: r.locked_at,
     updated_at: r.updated_at,
     image_file_id: r.image_file_id,

@@ -62,6 +62,8 @@ export type ProductView = {
   shipping_mark: string | null
   barcode: string | null
   showroom_sample: boolean
+  /** Ngày treo thẻ showroom (0303) — tick ngay trên tab Thông số, không qua form. */
+  showroom_tagged_at: string | null
   reference_price: number | null
   tech_spec: TechSpec
   hs_code: string | null
@@ -121,6 +123,7 @@ export function toProductView(p: Product): ProductView {
     shipping_mark: p.shipping_mark,
     barcode: p.barcode,
     showroom_sample: p.showroom_sample,
+    showroom_tagged_at: p.showroom_tagged_at,
     reference_price: p.reference_price,
     tech_spec: p.tech_spec ?? {},
     hs_code: p.hs_code,
@@ -438,7 +441,6 @@ export const SECTIONS: Record<string, SectionSpec> = {
     hint: 'in trên LSX',
     fields: [
       { name: 'machine', label: 'Máy', maxLength: 200, json: 'tech_spec' },
-      { name: 'showroom_sample', label: 'Có mẫu tại showroom', kind: 'checkbox' },
     ],
   },
   // Khối `docControl` (ISO HG-QT-07/M02 — Rev./hiệu lực/chữ ký) ĐÃ BỎ

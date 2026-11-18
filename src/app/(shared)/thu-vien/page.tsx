@@ -48,6 +48,7 @@ export default async function ThuVienSanPhamPage({
     tt: ttRaw === 'inactive' || ttRaw === 'all' ? ttRaw : 'active',
     lenh: str(sp.lenh) === '1',
     mau: str(sp.mau) === '1',
+    the: str(sp.the) === '1',
     gia: canPrice && str(sp.gia) === '1',
   }
   const page = Math.max(1, Number(str(sp.trang)) || 1)

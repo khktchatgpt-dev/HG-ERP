@@ -23,6 +23,7 @@ function countActive(f: Filters): number {
     f.lifecycle,
     f.type,
     f.category,
+    f.showroom,
   ].filter((v) => v !== 'all').length
 }
 

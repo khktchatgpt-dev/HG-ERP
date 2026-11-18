@@ -36,6 +36,8 @@ export type LibFlagRow = {
   plan_price: number | null
   plan_currency: string | null
   showroom_sample: boolean
+  /** Ngày treo thẻ showroom (0303). */
+  showroom_tagged_at: string | null
   /** `packing->>carton_l_cm` — jsonb đóng gói cũ có kích thước thùng không. */
   carton_l_cm: string | null
   /** `packing->>loading_40hc` — số xếp cont ở jsonb cũ (bù khi chưa có phương án thật). */
@@ -65,7 +67,7 @@ export const libraryRepo = {
         db()
           .from('technical_products')
           .select(
-            'id, code, is_active, customer_name, product_type, frame_material, bom_status, length_mm, width_mm, height_mm, image_file_id, plan_price, plan_currency, showroom_sample, carton_l_cm:packing->>carton_l_cm, loading_40hc:packing->>loading_40hc',
+            'id, code, is_active, customer_name, product_type, frame_material, bom_status, length_mm, width_mm, height_mm, image_file_id, plan_price, plan_currency, showroom_sample, showroom_tagged_at, carton_l_cm:packing->>carton_l_cm, loading_40hc:packing->>loading_40hc',
           )
           .order('code')
           .range(from, to) as unknown as PromiseLike<{

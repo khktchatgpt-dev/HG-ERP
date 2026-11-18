@@ -24,7 +24,6 @@ import {
   type ProductPart,
   type ProductSetItem,
 } from './technical.repo'
-import { samplesRepo } from './samples.repo'
 import { productRevisionsRepo } from './product-revisions.repo'
 import { profileRepo } from './profile.repo'
 
@@ -76,6 +75,8 @@ export type HoSoData = {
   packing: PackingOption[]
   files: HoSoFile[]
   hasSample: boolean
+  /** Ngày treo thẻ showroom (0303) — null = chưa treo. */
+  taggedAt: string | null
   check: HoSoCheck
   diem: { co: number; apDung: number }
   thieuSo: PartMissing[]
@@ -130,7 +131,8 @@ export const profileService = {
       productProfileRepo.setItems(id),
       productProfileRepo.packingOptions(id),
       filesRepo.listByProduct(id),
-      samplesRepo.productHasLiveSample(id),
+      // Mẫu showroom = ô tick trên hồ sơ (0303), không còn đếm bảng hiện vật mẫu.
+      Promise.resolve(product.showroom_sample),
       productRevisionsRepo.maxRev(id),
       canPrice ? profileRepo.planOf(id) : Promise.resolve(null),
       productRevisionsRepo.list(id),
@@ -204,6 +206,7 @@ export const profileService = {
         }
       }),
       hasSample,
+      taggedAt: product.showroom_tagged_at,
       check,
       diem: hoSoDiem(check),
       thieuSo: partsThieuSo(parts),

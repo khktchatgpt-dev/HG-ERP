@@ -186,6 +186,7 @@ export const spExcelService = {
               tt: q.tt === 'inactive' || q.tt === 'all' ? q.tt : 'active',
               lenh: q.lenh === '1',
               mau: q.mau === '1',
+              the: q.the === '1',
               gia: false,
               page,
               page_size: 500,
@@ -198,6 +199,14 @@ export const spExcelService = {
         label = 'thu-vien'
       }
       products = await spExcelRepo.listExisting(ids)
+      // Mẫu showroom (0303) — cùng vị từ với chip lọc của `/products` (technical.repo listLite).
+      if (q.showroom) {
+        products = products.filter(
+          (p) =>
+            p.showroom_sample && (q.showroom === 'co' || p.showroom_tagged_at == null),
+        )
+        label = q.showroom === 'co' ? 'mau-showroom' : 'chua-treo-the'
+      }
     }
     const images = new Map<string, ImageBytes>()
     const fileIds = [

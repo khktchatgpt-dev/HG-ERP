@@ -86,6 +86,8 @@ export async function buildSpWorkbook(
     n.alignment = { vertical: 'top', wrapText: true }
     if (c.kind === 'hidden') ws.getColumn(i + 1).hidden = true
     if (c.kind === 'code') ws.getColumn(i + 1).numFmt = '@'
+    // Cột chỉ xem: nền xám để người sửa file biết gõ vào đây không có tác dụng.
+    if (c.kind === 'info') h.fill = FILL('FFE3E7EE')
   })
   ws.getRow(SP_HEADER_ROW).height = 30
   ws.getRow(SP_NOTE_ROW).height = 26

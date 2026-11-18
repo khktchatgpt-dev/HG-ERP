@@ -29,7 +29,18 @@ export const SP_MAX_ROWS = 1000
 export const CLEAR = '-'
 
 export type ColKind =
-  'code' | 'image' | 'text' | 'type' | 'mat' | 'cust' | 'unit' | 'num' | 'bool' | 'hidden'
+  | 'code'
+  | 'image'
+  | 'text'
+  | 'type'
+  | 'mat'
+  | 'cust'
+  | 'unit'
+  | 'num'
+  | 'bool'
+  | 'hidden'
+  /** CHỈ XEM (mẫu showroom 0303): xuất ra, đọc lại thì BỎ QUA — tick trên ERP. */
+  | 'info'
 export type SpCol = {
   key: string
   group: string
@@ -45,6 +56,7 @@ const G2 = 'KÍCH THƯỚC · KHỐI LƯỢNG'
 const G3 = 'ĐÓNG GÓI (phương án mặc định)'
 const G4 = 'THÔNG SỐ IN LSX'
 const G5 = 'KHÁC'
+const G6 = 'SHOWROOM (chỉ xem)'
 export const SP_COLS: SpCol[] = [
   {
     key: 'code',
@@ -174,6 +186,23 @@ export const SP_COLS: SpCol[] = [
     width: 10,
     kind: 'bool',
   },
+  // Mẫu showroom (0303, phiếu 101026 PKD) — CHỈ XEM: tick trên danh sách / hồ sơ SP.
+  {
+    key: 'showroom_sample',
+    group: G6,
+    header: 'Có mẫu showroom',
+    note: 'chỉ xem — tick trên ERP',
+    width: 12,
+    kind: 'info',
+  },
+  {
+    key: 'showroom_tagged_at',
+    group: G6,
+    header: 'Đã treo thẻ',
+    note: 'ngày treo · chỉ xem',
+    width: 12,
+    kind: 'info',
+  },
   {
     key: 'version',
     group: '',
@@ -300,6 +329,9 @@ export type ExistingSp = {
   description_en: string | null
   notes: string | null
   is_active: boolean
+  /** Mẫu showroom (0303) — chỉ để xuất. */
+  showroom_sample: boolean
+  showroom_tagged_at: string | null
   locked_at: string | null
   updated_at: string
   image_file_id: string | null
@@ -350,12 +382,21 @@ export function currentValue(p: ExistingSp, key: string): string | number | null
   if (key === 'product_type') return optionText(PRODUCT_TYPES, p.product_type)
   if (key === 'frame_material') return optionText(FRAME_MATERIALS, p.frame_material)
   if (key === 'is_active') return p.is_active ? 'có' : 'không'
+  if (key === 'showroom_sample') return p.showroom_sample ? 'có' : 'không'
+  if (key === 'showroom_tagged_at')
+    return p.showroom_tagged_at ? dmyVn(p.showroom_tagged_at) : null
   if (key === 'version') return p.updated_at
   if (key.startsWith('pk_')) return p.pk[key as PkKey]
   if (key.startsWith('ts_')) return p.tech_spec[key.slice(3) as TsKey] ?? null
   if (key === 'image' || key === 'image_ref') return null
   const v = (p as unknown as Record<string, unknown>)[key]
   return typeof v === 'number' || typeof v === 'string' ? v : null
+}
+
+/** `dd/mm/yyyy` theo giờ VN (UTC+7) của một mốc timestamptz. */
+function dmyVn(ts: string): string {
+  const d = new Date(new Date(ts).getTime() + 7 * 3_600_000).toISOString()
+  return `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`
 }
 
 /** Vân tay ảnh đã xuất: `fileId|sha`. */
@@ -405,7 +446,8 @@ export function planRows(
     for (const col of SP_COLS) {
       if (
         ['code', 'image', 'version', 'image_ref', 'hidden'].includes(col.key) ||
-        col.kind === 'hidden'
+        col.kind === 'hidden' ||
+        col.kind === 'info'
       )
         continue
       const raw = c[col.key]

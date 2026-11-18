@@ -63,6 +63,8 @@ export type Product = {
   shipping_mark: string | null
   barcode: string | null
   showroom_sample: boolean
+  /** Ngày treo thẻ showroom (0303) — null = chưa treo. */
+  showroom_tagged_at: string | null
   reference_price: number | null
   /*
    * CỐ Ý KHÔNG có plan_* (giá thành kế hoạch, 0220) ở đây: đó là số riêng của
@@ -180,14 +182,14 @@ export type ProductWrite = Partial<Omit<Product, 'lifecycle' | 'created_by'>>
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, sample_confirmed_at, sample_confirmed_by, sample_note, owner_id, created_by, lifecycle, lifecycle_at, lifecycle_by, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, showroom_tagged_at, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, sample_confirmed_at, sample_confirmed_by, sample_note, owner_id, created_by, lifecycle, lifecycle_at, lifecycle_by, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
 // + net_weight_kg · is_set · showroom_sample (08/10/2026): màn thư viện mới bày
 // NW và hàng bộ/món. Giá KH (plan_*) KHÔNG đi đường này — xem `library.repo`.
 const LITE_COLS =
-  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, lifecycle, is_active, created_at, net_weight_kg, is_set, showroom_sample'
+  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, lifecycle, is_active, created_at, net_weight_kg, is_set, showroom_sample, showroom_tagged_at'
 
 export type ProductLite = Pick<
   Product,
@@ -219,6 +221,7 @@ export type ProductLite = Pick<
   | 'net_weight_kg'
   | 'is_set'
   | 'showroom_sample'
+  | 'showroom_tagged_at'
 >
 
 /**
@@ -261,6 +264,9 @@ export type ProductCounts = {
   no_image: number
   /** Hồ sơ ĐÃ KHOÁ (0140) — bản đã chốt, mọi phòng dùng được ngay. */
   locked: number
+  /** Mẫu showroom (0303): SP có mẫu, và trong đó chưa treo thẻ — cùng vị từ với lọc `showroom` của listLite. */
+  showroom_co: number
+  showroom_chua_the: number
 }
 
 /** Giá trị lọc đặc biệt = SP chưa gõ nhãn khách nào (nhóm "Mẫu chung"). */
@@ -346,6 +352,11 @@ export const productsRepo = {
     /** Mã vật liệu khung ('AL', 'IR'…) — xem FRAME_MATERIALS ở lib/product-code. */
     frame_material?: string
     /**
+     * Mẫu showroom (0303): `co` = có mẫu, `chua_the` = có mẫu chưa treo thẻ,
+     * `khong` = chưa có mẫu.
+     */
+    showroom?: 'co' | 'chua_the' | 'khong'
+    /**
      * CHỈ các id này (thư viện 08/10/2026: lọc "thiếu hồ sơ" / "đang trên lệnh"
      * tính ở app từ `libraryRepo` rồi đưa tập id xuống đây). Mảng rỗng = 0 dòng,
      * người gọi nên tự ngắt trước để khỏi tốn một truy vấn.
@@ -375,6 +386,11 @@ export const productsRepo = {
     if (filter.locked === true) q = q.not('locked_at', 'is', null)
     else if (filter.locked === false) q = q.is('locked_at', null)
     if (filter.lifecycle) q = q.eq('lifecycle', filter.lifecycle)
+    if (filter.showroom === 'khong') q = q.eq('showroom_sample', false)
+    else if (filter.showroom) {
+      q = q.eq('showroom_sample', true)
+      if (filter.showroom === 'chua_the') q = q.is('showroom_tagged_at', null)
+    }
     if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
@@ -502,12 +518,13 @@ export const productsRepo = {
     // index `technical_products_locked_idx` nên chỉ quét đúng phần đã khoá,
     // rẻ hơn cả việc sửa + chạy lại RPC cho mọi lần đếm. Trạng thái hồ sơ
     // (0145) KHÔNG đếm ở đây: bộ lọc của nó là dropdown, không phải chip có số.
-    const [rpc, locked] = await Promise.all([
+    const head = () =>
+      db().from('technical_products').select('id', { count: 'exact', head: true })
+    const [rpc, locked, coMau, chuaThe] = await Promise.all([
       db().rpc('technical_product_counts'),
-      db()
-        .from('technical_products')
-        .select('id', { count: 'exact', head: true })
-        .not('locked_at', 'is', null),
+      head().not('locked_at', 'is', null),
+      head().eq('showroom_sample', true),
+      head().eq('showroom_sample', true).is('showroom_tagged_at', null),
     ])
     if (rpc.error) throw new Error(rpc.error.message)
     const r = rpc.data?.[0]
@@ -519,6 +536,8 @@ export const productsRepo = {
       bom_done: Number(r?.bom_done ?? 0),
       no_image: Number(r?.no_image ?? 0),
       locked: locked.count ?? 0,
+      showroom_co: coMau.count ?? 0,
+      showroom_chua_the: chuaThe.count ?? 0,
     }
   },
 

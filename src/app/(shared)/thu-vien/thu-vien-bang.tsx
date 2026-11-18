@@ -16,6 +16,7 @@ import {
   type ThuVienFilters,
 } from './thu-vien.shared'
 import type { ThuVienCtx } from './useThuVien'
+import { ShowroomTicks } from '@/components/technical/ShowroomTicks'
 
 /**
  * Cột nào hiện ở bề rộng nào — đo bằng ResizeObserver rồi BỎ HẲN cột khỏi
@@ -30,8 +31,9 @@ export type CotHien = {
   gia: boolean
 }
 function cotTheoRong(w: number, canPrice: boolean): CotHien {
-  const lg = w >= 1180
-  const md = w >= 880
+  // +64 cho cột Mẫu · Thẻ (0303) — giữ chỗ cho Tên SP như trước khi thêm cột.
+  const lg = w >= 1244
+  const md = w >= 944
   return { loai: lg, kt: md, nwgw: lg, lenh: lg, gia: canPrice && md }
 }
 
@@ -65,7 +67,7 @@ export function BangThuVien({
     ro.observe(el)
     return () => ro.disconnect()
   }, [canPrice])
-  const soCot = 7 + Object.values(cot).filter(Boolean).length
+  const soCot = 8 + Object.values(cot).filter(Boolean).length
   const tu = total === 0 ? 0 : (page - 1) * 60 + 1
   const thieuTrenTrang = rows.filter((r) =>
     Object.values(r.check).includes('thieu'),
@@ -95,6 +97,9 @@ export function BangThuVien({
             )}
             <th style={{ width: 190 }}>Hồ sơ</th>
             <th style={{ width: 124 }}>Định mức</th>
+            <th style={{ width: 64 }} title="Mẫu ở showroom · đã treo thẻ (phiếu 101026) — tick là lưu">
+              Mẫu · Thẻ
+            </th>
             {cot.lenh && (
               <th
                 className="num"
@@ -219,6 +224,15 @@ function DongSp({ d, r, cot }: { d: ThuVienCtx; r: LibraryRow; cot: CotHien }) {
         <td>
           <TagDinhMuc status={r.bom_status} parts={r.parts} check={r.check} />
         </td>
+        <td>
+          <ShowroomTicks
+            productId={r.id}
+            coMau={r.showroom_sample}
+            taggedAt={r.showroom_tagged_at}
+            canEdit={d.canEdit}
+            bare
+          />
+        </td>
         {cot.lenh && (
           <td className="num">{r.lsx_open || <span className="muted">0</span>}</td>
         )}
@@ -287,6 +301,7 @@ function DongSp({ d, r, cot }: { d: ThuVienCtx; r: LibraryRow; cot: CotHien }) {
               <span className="muted">—</span>
             )}
           </td>
+          <td className="muted">—</td>
           {cot.lenh && <td className="num muted">{c.lsx_open || 0}</td>}
           {cot.gia && <td className="num muted">theo bộ</td>}
           <td />

@@ -16,6 +16,7 @@ import { isSvgUrl } from '@/lib/image'
 import { Badge } from '@/components/shadcn/badge'
 import { DataTable, type Column } from '@/components/erp/DataTable'
 import { RowMenu, type RowMenuItem } from '@/components/erp/RowMenu'
+import { ShowroomTicks } from '@/components/technical/ShowroomTicks'
 import { DocMeter, classLabel, docOkCount } from './product-meta'
 import type { ProductRow } from './types'
 
@@ -67,11 +68,14 @@ export function ProductTable({
   imageUrls,
   rowActions,
   onZoom,
+  canEdit,
 }: {
   products: ProductRow[]
   imageUrls: Record<string, string>
   rowActions: (p: ProductRow) => RowMenuItem[]
   onZoom: (p: ProductRow, url: string) => void
+  /** Được tick mẫu showroom (Kỹ thuật / Kinh doanh / Giám đốc). */
+  canEdit: boolean
 }) {
   const columns: Column<ProductRow>[] = [
     {
@@ -174,6 +178,24 @@ export function ProductTable({
             </Badge>
           )}
         </div>
+      ),
+    },
+    // Mẫu showroom (0303, phiếu 101026) — tick là ghi ngay, đi rà showroom bằng
+    // chính danh sách này (lọc "Có mẫu" / "Chưa treo thẻ" ở bộ lọc).
+    {
+      key: 'showroom',
+      header: 'Mẫu showroom',
+      // Sắp: có mẫu chưa treo thẻ lên đầu (việc còn phải làm), rồi đã treo, rồi chưa có mẫu.
+      sortValue: (p) => (!p.showroom_sample ? 2 : p.showroom_tagged_at ? 1 : 0),
+      width: '110px',
+      cell: (p) => (
+        <ShowroomTicks
+          productId={p.id}
+          coMau={p.showroom_sample}
+          taggedAt={p.showroom_tagged_at}
+          canEdit={canEdit}
+          compact
+        />
       ),
     },
     {

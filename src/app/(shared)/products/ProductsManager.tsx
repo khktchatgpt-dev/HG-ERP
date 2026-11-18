@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, PackageSearch, Plus, Sparkles, X } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileSpreadsheet,
+  PackageSearch,
+  Plus,
+  Sparkles,
+  X,
+} from 'lucide-react'
 import { BomAiNewProduct } from '@/components/technical/BomAiNewProduct'
 import { Button } from '@/components/shadcn/button'
 import { Modal } from '@/components/Modal'
@@ -14,7 +22,8 @@ import { parseProductCode } from '@/lib/product-code'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { EmptyState } from '@/components/erp/EmptyState'
 import type { RowMenuItem } from '@/components/erp/RowMenu'
-import { TopProgressBar } from '@/components/erp/Spinner'
+import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { useXuatExcel } from '@/components/technical/useXuatExcel'
 import { BomEditor } from './_components/BomEditor'
 import { CloneForm } from './_components/CloneForm'
 import { FilterBar } from './_components/FilterBar'
@@ -40,6 +49,24 @@ import {
 /** Hằng ngoài component: `{}` viết tại chỗ là object mới mỗi render → thẻ nhớ lại. */
 const EMPTY_IMAGE_URLS: Record<string, string> = {}
 
+/**
+ * Link xuất Excel theo bộ lọc đang bật. File dùng chung với Thư viện SP mới
+ * (`sp-excel/export`) nên chỉ mang được các lọc nó hiểu: tìm, khách, loại, tình
+ * trạng, mẫu showroom. Các lọc còn lại (định mức, ảnh, khoá, trạng thái hồ sơ,
+ * danh mục) KHÔNG áp — nói rõ ở tooltip.
+ */
+const EXPORT_TITLE =
+  'Xuất SP theo tìm kiếm, khách, loại, tình trạng và mẫu showroom đang lọc (kèm ảnh). Lọc định mức / ảnh / khoá / trạng thái hồ sơ / danh mục không áp vào file.'
+function exportHref(f: Filters): string {
+  const sp = new URLSearchParams()
+  if (f.q) sp.set('q', f.q)
+  if (f.customer !== 'all') sp.set('kh', f.customer)
+  if (f.type !== 'all') sp.set('loai', f.type)
+  sp.set('tt', f.status === 'active' || f.status === 'inactive' ? f.status : 'all')
+  if (f.showroom === 'co' || f.showroom === 'chua_the') sp.set('showroom', f.showroom)
+  return `/api/dept/technical/products/sp-excel/export?${sp.toString()}`
+}
+
 /** Người dùng đang thu hẹp danh sách (tìm hoặc lọc) chứ không phải chỉ mở trang. */
 function hasActiveFilter(f: Filters): boolean {
   return (
@@ -53,7 +80,8 @@ function hasActiveFilter(f: Filters): boolean {
     f.locked !== 'all' ||
     f.lifecycle !== 'all' ||
     f.type !== 'all' ||
-    f.category !== 'all'
+    f.category !== 'all' ||
+    f.showroom !== 'all'
   )
 }
 
@@ -98,6 +126,7 @@ export function ProductsManager({
   canEdit: boolean
 }) {
   const router = useRouter()
+  const xe = useXuatExcel()
   const sp = useSearchParams()
   const toast = useToast()
   const confirm = useConfirm()
@@ -230,6 +259,7 @@ export function ProductsManager({
       lifecycle: undefined,
       type: undefined,
       category: undefined,
+      showroom: undefined,
       // Xoá lọc phải đưa về ĐÚNG màn mở đầu; sót `recent` thì vẫn còn một danh
       // sách 24 dòng nằm đó và người dùng tưởng lọc chưa xoá hết.
       recent: undefined,
@@ -399,7 +429,7 @@ export function ProductsManager({
 
   return (
     <div className="flex flex-col gap-4">
-      <TopProgressBar active={busy} />
+      <TopProgressBar active={busy || xe.busy} />
       {/* Khu dùng chung: breadcrumb KHÔNG dẫn về /technical — người ngoài phòng
           Kỹ thuật bấm vào là bị gate workspace đá về '/'. */}
       <PageHeader
@@ -416,6 +446,18 @@ export function ProductsManager({
         }
         actions={
           <>
+            {/* Xuất Excel (cùng file với Thư viện SP mới, kèm ảnh + cột mẫu showroom).
+                Ai xem được thư viện cũng xuất được — Kinh doanh cần file mẫu showroom. */}
+            <Button
+              variant="outline"
+              size="sm"
+              title={EXPORT_TITLE}
+              disabled={xe.busy}
+              onClick={() => void xe.xuat(exportHref(filters))}
+            >
+              {xe.busy ? <Spinner /> : <FileSpreadsheet />}
+              {xe.busy ? 'Đang tạo file…' : 'Xuất Excel'}
+            </Button>
             {canEdit && (
               <Button variant="outline" size="sm" onClick={() => setFromBom(true)}>
                 <Sparkles /> Tạo bằng AI
@@ -431,6 +473,22 @@ export function ProductsManager({
           </>
         }
       />
+
+      {/* Xuất Excel đang chạy / xong / lỗi — báo TẠI CHỖ (cả thư viện kèm ảnh ~20 giây). */}
+      {(xe.busy || xe.err || xe.xong != null) && (
+        <p
+          role="status"
+          className={
+            xe.err ? 'text-sm text-[var(--stop)]' : 'text-muted-foreground text-sm'
+          }
+        >
+          {xe.busy
+            ? 'Đang tạo file Excel kèm ảnh — khoảng 20 giây cho cả thư viện, đừng bấm lại.'
+            : xe.err
+              ? xe.err
+              : `Đã tạo file ${xe.xong} SP — trình duyệt đang tải về (xem thư mục Tải xuống).`}
+        </p>
+      )}
 
       {fromBom && <BomAiNewProduct onClose={() => setFromBom(false)} />}
 
@@ -510,6 +568,7 @@ export function ProductsManager({
           imageUrls={shownImageUrls}
           rowActions={rowActions}
           onZoom={(product, url) => setPreview({ product, url })}
+          canEdit={canEdit}
         />
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

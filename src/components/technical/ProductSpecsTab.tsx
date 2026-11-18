@@ -13,6 +13,7 @@ import {
 } from '@/components/technical/product-sections'
 import type { PackingOptionView } from '@/components/technical/ProductProfileCards'
 import { FRAME_MATERIALS } from '@/lib/product-code'
+import { ShowroomTicks } from '@/components/technical/ShowroomTicks'
 
 /**
  * Tab THÔNG SỐ KỸ THUẬT — MỘT trang trả lời trọn "sản phẩm này là cái gì".
@@ -159,12 +160,21 @@ export function ProductSpecsTab({
           tone="emerald"
           title="Thông số sản xuất"
           hint="in trên LSX"
-          fields={[
-            ['Máy', ts.machine],
-            ['Mẫu showroom', product.showroom_sample ? 'Có' : 'Không'],
-          ]}
+          fields={[['Máy', ts.machine]]}
           onEdit={editHandler('techSpec')}
           editing={node('techSpec')}
+        />
+      </div>
+
+      {/* Mẫu showroom (0303) — tick là ghi ngay, không qua Sửa/Lưu; không bị khoá
+          hồ sơ chặn vì không phải thông số SP. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-sm">
+        <span className="text-muted-foreground">Mẫu showroom</span>
+        <ShowroomTicks
+          productId={product.id}
+          coMau={product.showroom_sample}
+          taggedAt={product.showroom_tagged_at}
+          canEdit={canEdit}
         />
       </div>
 
