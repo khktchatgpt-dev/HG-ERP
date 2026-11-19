@@ -14,7 +14,7 @@ const bodySchema = z.object({
   data: danSoSchema,
   /** Chỉ ghi các ngày này (ghi từng đợt nhỏ có tiến độ). Bỏ trống = ghi hết. */
   ngay: z
-    .array(z.string().regex(/^d{4}-d{2}-d{2}$/))
+    .array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
     .max(60)
     .optional(),
 })
