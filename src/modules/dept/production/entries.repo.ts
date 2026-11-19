@@ -1,4 +1,25 @@
 import { db } from '@/server/db'
+import { theoLo } from '@/server/theo-lo'
+
+/** Đọc HẾT một truy vấn theo trang 1.000 dòng (PostgREST cắt ở max-rows, `.limit()` lớn hơn không vượt được). */
+async function docHet<T>(
+  q: () => {
+    range(
+      a: number,
+      b: number,
+    ): PromiseLike<{ data: unknown; error: { message: string } | null }>
+  },
+): Promise<T[]> {
+  const out: T[] = []
+  for (let tu = 0; ; tu += 1000) {
+    const { data, error } = await q().range(tu, tu + 999)
+    if (error) throw new Error(error.message)
+    const rows = (data ?? []) as T[]
+    out.push(...rows)
+    if (rows.length < 1000) break
+  }
+  return out
+}
 
 /**
  * production_entries (0084) — sổ số liệu của thống kê xưởng:
@@ -123,15 +144,19 @@ export const entriesRepo = {
   async listByLsxWithStatus(
     productionOrderId: string,
   ): Promise<(ProductionEntry & { doc_status: string })[]> {
-    const { data } = await db()
-      .from('production_entries')
-      .select(`${COLS}, doc:production_entry_docs(status)`)
-      .eq('production_order_id', productionOrderId)
-      .limit(20000)
     type Row = ProductionEntry & {
       doc: { status: string } | { status: string }[] | null
     }
-    return ((data ?? []) as unknown as Row[]).map((r) => {
+    // PostgREST cắt ở 1000 dòng mỗi lần (`.limit(20000)` không vượt được) — đọc hết bằng range.
+    const data = await theoLo<Row>([productionOrderId], (lo) =>
+      db()
+        .from('production_entries')
+        .select(`${COLS}, doc:production_entry_docs(status)`)
+        .in('production_order_id', lo)
+        .order('created_at', { ascending: true })
+        .order('id'),
+    )
+    return (data as unknown as Row[]).map((r) => {
       const doc = Array.isArray(r.doc) ? r.doc[0] : r.doc
       return {
         ...r,
@@ -154,15 +179,18 @@ export const entriesRepo = {
     ids: string[],
   ): Promise<(ProductionEntry & { doc_status: string })[]> {
     if (!ids.length) return []
-    const { data } = await db()
-      .from('production_entries')
-      .select(`${COLS}, doc:production_entry_docs(status)`)
-      .in('production_order_id', ids)
-      .limit(50000)
     type Row = ProductionEntry & {
       doc: { status: string } | { status: string }[] | null
     }
-    return ((data ?? []) as unknown as Row[]).map((r) => {
+    const data = await theoLo<Row>(ids, (lo) =>
+      db()
+        .from('production_entries')
+        .select(`${COLS}, doc:production_entry_docs(status)`)
+        .in('production_order_id', lo)
+        .order('created_at', { ascending: true })
+        .order('id'),
+    )
+    return (data as unknown as Row[]).map((r) => {
       const doc = Array.isArray(r.doc) ? r.doc[0] : r.doc
       return {
         ...r,
@@ -177,13 +205,15 @@ export const entriesRepo = {
   },
 
   async listByLsx(productionOrderId: string): Promise<ProductionEntry[]> {
-    const { data } = await db()
-      .from('production_entries')
-      .select(COLS)
-      .eq('production_order_id', productionOrderId)
-      .order('created_at', { ascending: true })
-      .limit(20000)
-    return ((data ?? []) as ProductionEntry[]).map((r) => ({
+    const data = await theoLo<ProductionEntry>([productionOrderId], (lo) =>
+      db()
+        .from('production_entries')
+        .select(COLS)
+        .in('production_order_id', lo)
+        .order('created_at', { ascending: true })
+        .order('id'),
+    )
+    return data.map((r) => ({
       ...r,
       qty: Number(r.qty),
       kg: r.kg == null ? null : Number(r.kg),
@@ -195,12 +225,15 @@ export const entriesRepo = {
   /** Sổ của NHIỀU lệnh — bảng tổng/báo cáo, tránh N query. */
   async listByLsxBulk(ids: string[]): Promise<ProductionEntry[]> {
     if (!ids.length) return []
-    const { data } = await db()
-      .from('production_entries')
-      .select(COLS)
-      .in('production_order_id', ids)
-      .limit(50000)
-    return ((data ?? []) as ProductionEntry[]).map((r) => ({
+    const data = await theoLo<ProductionEntry>(ids, (lo) =>
+      db()
+        .from('production_entries')
+        .select(COLS)
+        .in('production_order_id', lo)
+        .order('created_at', { ascending: true })
+        .order('id'),
+    )
+    return data.map((r) => ({
       ...r,
       qty: Number(r.qty),
       kg: r.kg == null ? null : Number(r.kg),
@@ -211,13 +244,16 @@ export const entriesRepo = {
 
   /** Sổ trong khoảng ngày [from, to] — báo cáo tuần/chất lượng khu GĐ. */
   async listRange(fromDate: string, toDate: string): Promise<ProductionEntry[]> {
-    const { data } = await db()
-      .from('production_entries')
-      .select(COLS)
-      .gte('entry_date', fromDate)
-      .lte('entry_date', toDate)
-      .limit(50000)
-    return ((data ?? []) as ProductionEntry[]).map((r) => ({
+    const data = await docHet<ProductionEntry>(() =>
+      db()
+        .from('production_entries')
+        .select(COLS)
+        .gte('entry_date', fromDate)
+        .lte('entry_date', toDate)
+        .order('entry_date')
+        .order('id'),
+    )
+    return data.map((r) => ({
       ...r,
       qty: Number(r.qty),
       kg: r.kg == null ? null : Number(r.kg),
@@ -249,18 +285,20 @@ export const entriesRepo = {
   ): Promise<
     { entry_date: string; team_department_id: string; team_name: string | null }[]
   > {
-    const { data } = await db()
-      .from('production_entries')
-      .select('entry_date, team_department_id, team:departments(name)')
-      .gte('entry_date', fromDate)
-      .lte('entry_date', toDate)
-      .not('team_department_id', 'is', null)
-      .limit(20000)
-    const rows = (data ?? []) as unknown as {
+    const rows = await docHet<{
       entry_date: string
       team_department_id: string
       team: One<{ name: string }>
-    }[]
+    }>(() =>
+      db()
+        .from('production_entries')
+        .select('entry_date, team_department_id, team:departments(name)')
+        .gte('entry_date', fromDate)
+        .lte('entry_date', toDate)
+        .not('team_department_id', 'is', null)
+        .order('entry_date')
+        .order('id'),
+    )
     const seen = new Map<
       string,
       { entry_date: string; team_department_id: string; team_name: string | null }
