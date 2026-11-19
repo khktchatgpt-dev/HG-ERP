@@ -91,6 +91,8 @@ export type KetQuaGhi = {
     ten: string
     dot: string
     so_ct: number
+    /** Id chi tiết đã ghi — màn ghép nhiều đợt gửi (ghi từng đợt nhỏ) gộp lại để đếm đúng số chi tiết. */
+    ct_ids: string[]
     tong: number
     moi: number
   }[]
@@ -776,7 +778,17 @@ export const danSoService = {
     return { dong: r.dong, cot_loi: r.cotLoi, tom_tat: r.tomTat, canh_bao: r.canhBao }
   },
 
-  async ghi(user: User, input: DanSoInput): Promise<KetQuaGhi> {
+  /**
+   * `opt.ngay` = chỉ ghi các ngày này (ghi TỪNG ĐỢT NHỎ để không quá thời gian một yêu cầu và để
+   * màn báo tiến độ). Mỗi đợt tính lại từ đầu: ô đã ghi ở đợt trước thành "trùng", phần chia đợt
+   * (lấp theo thứ tự) tính tiếp từ số đã làm — nên chạy từng đợt theo thứ tự ngày cho ra đúng
+   * số như ghi một lượt.
+   */
+  async ghi(
+    user: User,
+    input: DanSoInput,
+    opt?: { ngay?: string[] },
+  ): Promise<KetQuaGhi> {
     await assertAction(user, 'production.entries.record')
     const r = await tinh(input, user)
     if (r.cotLoi.length > 0) {
@@ -853,7 +865,10 @@ export const danSoService = {
     const phieu: KetQuaGhi['phieu'] = []
     const tong = new Map<string, { cts: Set<string>; q: number }>()
     const canhBao: string[] = [...r.canhBao]
-    for (const [iso, entries] of [...theoNgay].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const chiNgay = opt?.ngay ? new Set(opt.ngay) : null
+    for (const [iso, entries] of [...theoNgay]
+      .filter(([iso]) => !chiNgay || chiNgay.has(iso))
+      .sort((a, b) => a[0].localeCompare(b[0]))) {
       try {
         const res = await entriesService.record(
           user,
@@ -900,6 +915,7 @@ export const danSoService = {
         ten: l.name_vi ?? l.name_foreign ?? '',
         dot: l.ship_label ?? l.ship_date ?? '',
         so_ct: tong.get(l.id)?.cts.size ?? 0,
+        ct_ids: [...(tong.get(l.id)?.cts ?? [])],
         tong: tong.get(l.id)?.q ?? 0,
         moi: moiTheoDong.get(l.id) ?? 0,
       }))

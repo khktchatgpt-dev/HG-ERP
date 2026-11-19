@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, apiErrorText } from '@/lib/api'
 import { chuan, docDan, type DongDan } from '@/lib/dan-so'
+import { chiaDot, gopKetQua, ngayCanGhi } from '@/lib/dan-so-ghi'
 import type {
   KetQuaGhi,
   TuyChonDanSo,
@@ -38,6 +39,11 @@ export function useDanSo(opt: TuyChonDanSo) {
   const [ketXem, setKetXem] = useState<{ cho: unknown; r: XemDanSo } | null>(null)
   const [loi, setLoi] = useState<string | null>(null)
   const [dangGhi, setDangGhi] = useState(false)
+  /** Tiến độ ghi từng đợt: số phiếu đã xong / tổng, ngày đợt đang ghi. */
+  const [tienDo, setTienDo] = useState<{ da: number; tong: number; hien: string } | null>(
+    null,
+  )
+  const dungRef = useRef(false)
   const [ketQua, setKetQua] = useState<KetQuaGhi | null>(null)
   const [nhay, setNhay] = useState<number | null>(null)
 
@@ -191,18 +197,46 @@ export function useDanSo(opt: TuyChonDanSo) {
     if (whyGhi || dangGhi) return
     setDangGhi(true)
     setLoi(null)
+    dungRef.current = false
+    // Ghi TỪNG ĐỢT 10 ngày: không quá thời gian một yêu cầu, có tiến độ, đứt giữa chừng thì ghi
+    // tiếp được (ô đã ghi thành "trùng" ở lần tính sau).
+    const ngay = ngayCanGhi(xem)
+    const dots: (string[] | null)[] = ngay.length > 0 ? chiaDot(ngay, 10) : [null]
+    const parts: KetQuaGhi[] = []
+    const phieuXong = () =>
+      parts.reduce((a, p) => a + p.phieu.filter((x) => x.doc_no).length, 0)
     try {
-      const r = await api<KetQuaGhi>('/api/dept/production/dan-so', {
-        method: 'POST',
-        body: { mode: 'ghi', data: payload },
-      })
-      setKetQua(r)
+      for (let i = 0; i < dots.length; i++) {
+        setTienDo({ da: phieuXong(), tong: ngay.length, hien: dots[i]?.[0] ?? '' })
+        const r = await api<KetQuaGhi>('/api/dept/production/dan-so', {
+          method: 'POST',
+          body: { mode: 'ghi', data: payload, ...(dots[i] ? { ngay: dots[i] } : {}) },
+        })
+        parts.push(r)
+        if (dungRef.current && i < dots.length - 1) {
+          setLoi(
+            `Đã dừng: ghi ${phieuXong()}/${ngay.length} phiếu. Bấm Ghi để ghi tiếp — ô đã ghi tự bỏ qua.`,
+          )
+          return
+        }
+      }
+      setKetQua(gopKetQua(parts))
       setBuoc('xong')
     } catch (e) {
-      setLoi(apiErrorText(e, 'Không ghi được'))
+      setLoi(
+        `${apiErrorText(e, 'Không ghi được')}${
+          parts.length > 0
+            ? ` — đã ghi ${phieuXong()}/${ngay.length} phiếu. Bấm Ghi để ghi tiếp, ô đã ghi tự bỏ qua.`
+            : ''
+        }`,
+      )
     } finally {
       setDangGhi(false)
+      setTienDo(null)
     }
+  }
+  const dung = () => {
+    dungRef.current = true
   }
   const lamLai = () => {
     setText('')
@@ -228,6 +262,8 @@ export function useDanSo(opt: TuyChonDanSo) {
     dangTinh,
     loi,
     dangGhi,
+    tienDo,
+    dung,
     ketQua,
     nhay,
     doc,

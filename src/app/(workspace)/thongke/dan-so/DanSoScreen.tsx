@@ -82,6 +82,7 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
                   <ApNut primary onClick={d.ghi} why={d.whyGhi} busy={d.dangGhi}>
                     {d.xem ? `Ghi ${fmt(d.xem.tom_tat.o_ghi)} ô` : 'Ghi'}
                   </ApNut>
+                  {d.dangGhi && <ApNut onClick={d.dung}>Dừng sau đợt này</ApNut>}
                 </ApNhom>
               )}
               {d.buoc === 'xong' && (
@@ -271,10 +272,26 @@ function BuocXem({ d }: { d: DanSoCtx }) {
   ] as const
   return (
     <>
-      {d.dangGhi && x && (
+      {d.dangGhi && x && d.tienDo && (
         <div className="sx-note" role="status">
-          <b>Đang ghi {x.tom_tat.ngay_ghi} phiếu</b> — mỗi phiếu mất vài giây, cả tờ có
-          thể mất vài phút. Đừng đóng trang và đừng bấm Ghi lần nữa.
+          <b>
+            Đang ghi phiếu {fmt(d.tienDo.da)}/{fmt(d.tienDo.tong)}
+          </b>
+          {d.tienDo.hien && (
+            <>
+              {' '}
+              (từ ngày {d.tienDo.hien.slice(8)}/{d.tienDo.hien.slice(5, 7)})
+            </>
+          )}{' '}
+          — ghi từng đợt 10 ngày. Đừng đóng trang. Mất mạng giữa chừng thì mở lại, dán lại
+          và bấm Ghi tiếp: ô đã ghi tự bỏ qua.
+          <div className="sx-ds-pr" aria-hidden="true">
+            <i
+              style={{
+                width: `${d.tienDo.tong ? Math.round((d.tienDo.da / d.tienDo.tong) * 100) : 0}%`,
+              }}
+            />
+          </div>
         </div>
       )}
       <TabNgang

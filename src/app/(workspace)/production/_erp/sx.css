@@ -3062,3 +3062,17 @@
   padding: 5px 8px;
   position: static;
 }
+
+/* Dán sổ Excel — thanh tiến độ ghi từng đợt */
+.sx.sx .sx-ds-pr {
+  height: 8px;
+  margin-top: 6px;
+  max-width: 420px;
+  background: var(--sx-line);
+  position: relative;
+}
+.sx.sx .sx-ds-pr > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sx-act);
+}
