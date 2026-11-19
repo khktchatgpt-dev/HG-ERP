@@ -20,6 +20,8 @@ import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { vnTodayIso } from '@/lib/local-date'
 import type { DanSoInput } from './dan-so.schema'
 import { gopDongMau, ngayTuDen, type MauDong, type MauDongRaw } from '@/lib/dan-so-mau'
+import ExcelJS from 'exceljs'
+import { docFileMau, timTo } from './dan-so-tai-len.parse'
 
 /**
  * DÁN SỔ EXCEL (bản vẽ 17/11/2026, https://claude.ai/artifact/TN9FdcN5S1mJBDAvwQcsS4,
@@ -117,6 +119,24 @@ export type MauLenh = {
     /** Ô đã có số trong khoảng ngày (cho tổ điền sẵn). */
     so_o_co: number
   }[]
+}
+
+/** Kết quả đọc file mẫu đã điền: mỗi tờ = một `DanSoInput` sẵn để xem trước / ghi. */
+export type TaiLenKetQua = {
+  lsx_id: string
+  lsx_code: string
+  to: {
+    ten_to: string
+    stage: string
+    label: string
+    team_id: string | null
+    /** Tên tổ ghi ở ô H1 của tờ (rỗng = chưa chọn). */
+    to_ten: string
+    /** Vướng chặn ở mức tờ (chưa chọn tổ, công đoạn lạ…) — chữ người đọc được. */
+    van_de: string[]
+    payload: DanSoInput
+  }[]
+  bo_qua: { ten_to: string; ly_do: string }[]
 }
 
 export type TuyChonDanSo = {
@@ -792,6 +812,71 @@ export const danSoService = {
       })
     }
     return { lsx_code: lsx.code, stage_label: stage.label, to }
+  },
+
+  /** Đọc FILE MẪU đã điền (bản vẽ v2). Chưa ghi gì — màn gọi `xem` từng tờ rồi `ghi` từng đợt. */
+  async taiLen(user: User, buf: Buffer, nam: number): Promise<TaiLenKetQua> {
+    await assertAction(user, 'production.entries.record')
+    const wb = new ExcelJS.Workbook()
+    try {
+      await wb.xlsx.load(buf as never)
+    } catch {
+      throw BadRequest(
+        'Không đọc được file — cần file .xlsx (không phải .xls) tải từ File mẫu',
+      )
+    }
+    const f = docFileMau(wb, nam)
+    if (!f.lsx_id || f.to.length === 0) {
+      throw BadRequest(
+        f.bo_qua[0]?.ly_do ??
+          'Không thấy tờ nào của file mẫu — tải file ở màn File mẫu nhập liệu',
+      )
+    }
+    const [lsx, stagesCat, depts] = await Promise.all([
+      productionRepo.findById(f.lsx_id),
+      productionRepo.listStages(),
+      departmentsRepo.list(),
+    ])
+    if (!lsx) throw NotFound('Lệnh sản xuất của file không còn tồn tại')
+    const teams = depts.filter((d) => d.workspace_id === 'production')
+    // Tờ chưa điền số nào thì không cần tổ, không vào danh sách (khỏi chặn ghi vì ô tổ trống).
+    const coSo = f.to.filter((t) => t.rows.length > 0)
+    const trong = f.to
+      .filter((t) => t.rows.length === 0)
+      .map((t) => ({ ten_to: t.ten_to, ly_do: 'Chưa điền số nào' }))
+    if (coSo.length === 0)
+      throw BadRequest('File chưa có số nào để ghi — điền vào ô vàng rồi tải lại')
+    return {
+      lsx_id: f.lsx_id,
+      lsx_code: lsx.code,
+      bo_qua: [...f.bo_qua, ...trong],
+      to: coSo.map((t) => {
+        const st = stagesCat.find((x) => x.code === t.stage)
+        const team = timTo(t.to_ten, teams)
+        const vanDe: string[] = []
+        if (!st) vanDe.push(`Công đoạn "${t.stage}" không còn trong danh mục`)
+        if (!t.to_ten) vanDe.push('Chưa chọn tổ ở ô H1 của tờ')
+        else if (!team)
+          vanDe.push(`Tổ "${t.to_ten}" không có trong danh sách tổ sản xuất`)
+        if (t.rows.length > 1500) vanDe.push('Tờ có quá 1.500 dòng có số — chia nhỏ file')
+        return {
+          ten_to: t.ten_to,
+          stage: t.stage,
+          label: st?.label ?? t.stage,
+          team_id: team,
+          to_ten: t.to_ten,
+          van_de: vanDe,
+          payload: {
+            lsx_id: f.lsx_id!,
+            line_id: null,
+            stage: t.stage,
+            team_id: team ?? '',
+            cot: t.cot,
+            rows: t.rows.slice(0, 1500),
+          } as DanSoInput,
+        }
+      }),
+    }
   },
 
   /**

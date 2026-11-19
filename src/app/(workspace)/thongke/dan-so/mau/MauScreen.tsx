@@ -158,6 +158,7 @@ export function MauScreen({
             <>
               <ApNhom>
                 <ApNut href="/thongke/dan-so">Dán một tờ</ApNut>
+                <ApNut href="/thongke/dan-so/tai-len">Tải file lên</ApNut>
               </ApNhom>
               <ApNhom>
                 {why ? (
@@ -331,9 +332,9 @@ export function MauScreen({
                 </table>
                 {daTai === qs && (
                   <div className="sx-note done" role="status">
-                    <b>Đã tải file.</b> Mở bằng Excel, điền số vào ô vàng. Chưa có chỗ tải
-                    lên — tạm thời sao chép từng tờ rồi dán ở{' '}
-                    <Link href="/thongke/dan-so">Dán một tờ</Link>.
+                    <b>Đã tải file.</b> Mở bằng Excel, điền số vào ô vàng, xong thì{' '}
+                    <Link href="/thongke/dan-so/tai-len">tải file lên</Link> để ghi một
+                    lần.
                   </div>
                 )}
                 <ol className="sx-mau-b">
@@ -342,9 +343,7 @@ export function MauScreen({
                     Điền số ĐẠT trong ngày vào ô vàng; chi tiết mới gõ ở dòng cuối tờ
                     PHÔI.
                   </li>
-                  <li>
-                    Tải lên để ghi một lần — <span className="mut">sắp có</span>.
-                  </li>
+                  <li>Tải file lên (nút “Tải file lên” góc trên) để ghi một lần.</li>
                 </ol>
               </>
             )}
