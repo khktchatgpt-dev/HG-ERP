@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, apiErrorText } from '@/lib/api'
 import { chuan, docDan, type DongDan } from '@/lib/dan-so'
 import { chiaDot, gopKetQua, ngayCanGhi } from '@/lib/dan-so-ghi'
+import { ghiLenhNho, lenhBanDau } from '@/lib/lenh-nho'
 import type {
   KetQuaGhi,
   TuyChonDanSo,
@@ -23,8 +24,13 @@ type Sua = { ten?: string; boO?: string[]; moi?: boolean }
  * tính xem trước ở server mỗi khi dòng đổi (xem trước và ghi dùng CHUNG một hàm
  * `tinh`, nên số người thấy = số được ghi).
  */
-export function useDanSo(opt: TuyChonDanSo) {
-  const [lsxId, setLsxId] = useState(opt.lenh[0]?.id ?? '')
+export function useDanSo(opt: TuyChonDanSo, lenhNho: string | null = null) {
+  const [lsxId, setLsxId] = useState(() =>
+    lenhBanDau(
+      lenhNho,
+      opt.lenh.map((l) => l.id),
+    ),
+  )
   const [lineId, setLineId] = useState('')
   const [stage, setStage] = useState(opt.mac_dinh.stage ?? opt.stages[0]?.code ?? '')
   const [teamId, setTeamId] = useState(opt.mac_dinh.team ?? opt.teams[0]?.id ?? '')
@@ -280,6 +286,7 @@ export function useDanSo(opt: TuyChonDanSo) {
       doiDauVao(() => {
         setLsxId(v)
         setLineId('')
+        ghiLenhNho(v)
       }),
     chonDong: (v: string) => doiDauVao(() => setLineId(v)),
     chonCD: (v: string) => doiDauVao(() => setStage(v)),

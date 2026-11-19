@@ -12,6 +12,7 @@ import {
 } from '@/app/(workspace)/production/_erp/khung'
 import { api } from '@/lib/api'
 import { khoangMacDinh } from '@/lib/dan-so-mau'
+import { ghiLenhNho, lenhBanDau } from '@/lib/lenh-nho'
 import { fmt } from '../../da-ghi/so-da-ghi.shared'
 import type { TuyChonDanSo } from '@/modules/dept/production/dan-so.service'
 
@@ -36,9 +37,20 @@ type TomTat = {
   }[]
 }
 
-export function MauScreen({ opt }: { opt: TuyChonDanSo }) {
+export function MauScreen({
+  opt,
+  lenhNho = null,
+}: {
+  opt: TuyChonDanSo
+  lenhNho?: string | null
+}) {
   const kd = useMemo(() => khoangMacDinh(opt.today), [opt.today])
-  const [lsxId, setLsxId] = useState(opt.lenh[0]?.id ?? '')
+  const [lsxId, setLsxId] = useState(() =>
+    lenhBanDau(
+      lenhNho,
+      opt.lenh.map((l) => l.id),
+    ),
+  )
   /** null = cả lệnh. */
   const [chon, setChon] = useState<Set<string> | null>(null)
   const [tu, setTu] = useState(kd.tu)
@@ -92,7 +104,8 @@ export function MauScreen({ opt }: { opt: TuyChonDanSo }) {
   }, [qs, hopLe])
 
   const dangTinh = hopLe && tt?.cho !== qs
-  const v = tt?.cho === qs ? tt.v : null
+  // Giữ bảng cũ (mờ) trong lúc tính lại — khỏi nhấp nháy trống 20 giây mỗi lần đổi ô chọn.
+  const v = tt?.v ?? null
   const soTo = v?.to.length ?? 0
   const why = !lsxId
     ? 'Chọn lệnh'
@@ -104,9 +117,21 @@ export function MauScreen({ opt }: { opt: TuyChonDanSo }) {
           ? 'Lệnh chưa có công đoạn nào để nhập'
           : null
 
+  // Nhớ lựa chọn đã tải: đổi lệnh / ngày thì lời nhắn tự tắt (không cần effect).
+  const [daTai, setDaTai] = useState<string | null>(null)
   const doiLenh = (id: string) => {
     setLsxId(id)
     setChon(null)
+    ghiLenhNho(id)
+  }
+  const dat = (soNgay: number | 'thang') => {
+    if (soNgay === 'thang') {
+      setTu(`${opt.today.slice(0, 7)}-01`)
+    } else {
+      const h = khoangMacDinh(opt.today, soNgay)
+      setTu(h.tu)
+    }
+    setDen(opt.today)
   }
   const bat = (ma: string) =>
     setChon((c) => {
@@ -143,6 +168,7 @@ export function MauScreen({ opt }: { opt: TuyChonDanSo }) {
                   <a
                     className="sx-btn p"
                     href={`/api/dept/production/dan-so/mau-lenh?${qs}`}
+                    onClick={() => setDaTai(qs)}
                   >
                     {`Tải file mẫu · ${soTo} tờ`}
                   </a>
@@ -212,8 +238,27 @@ export function MauScreen({ opt }: { opt: TuyChonDanSo }) {
                   aria-label="Đến ngày"
                 />
               </span>
+              <span
+                className="sx-mau-ps"
+                role="group"
+                aria-label="Chọn nhanh khoảng ngày"
+              >
+                {([7, 14, 31] as const).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className="sx-mau-p"
+                    onClick={() => dat(n)}
+                  >
+                    {n} ngày
+                  </button>
+                ))}
+                <button type="button" className="sx-mau-p" onClick={() => dat('thang')}>
+                  Tháng này
+                </button>
+              </span>
               <span className="mut">
-                {v ? `${v.so_ngay} ngày` : ''} · mặc định 7 ngày gần nhất, tối đa 31 ngày
+                {v ? `${v.so_ngay} ngày` : ''} · tối đa 31 ngày gần nhất tới “Đến ngày”
               </span>
             </div>
             <label className="sx-mau-c">
@@ -245,15 +290,27 @@ export function MauScreen({ opt }: { opt: TuyChonDanSo }) {
               />
             ) : (
               <>
-                <b>File sẽ có</b>
-                <table className="sx-tb">
+                <b>
+                  File sẽ có
+                  {dangTinh && <span className="mut"> · đang tính lại…</span>}
+                </b>
+                <table
+                  className="sx-tb"
+                  style={dangTinh ? { opacity: 0.45 } : undefined}
+                  aria-busy={dangTinh}
+                >
                   <thead>
                     <tr>
                       <th>Tờ</th>
                       <th>Tổ điền sẵn</th>
                       <th className="r">Dòng</th>
                       <th>Đếm theo</th>
-                      <th className="r">Ô đã có số</th>
+                      <th
+                        className="r"
+                        title="Số ô ngày đã có sổ của tổ điền sẵn, trong khoảng ngày đã chọn — hiện sẵn trong ô vàng"
+                      >
+                        Ô đã có số
+                      </th>
                       <th>Mã SP</th>
                     </tr>
                   </thead>
@@ -272,6 +329,23 @@ export function MauScreen({ opt }: { opt: TuyChonDanSo }) {
                     ))}
                   </tbody>
                 </table>
+                {daTai === qs && (
+                  <div className="sx-note done" role="status">
+                    <b>Đã tải file.</b> Mở bằng Excel, điền số vào ô vàng. Chưa có chỗ tải
+                    lên — tạm thời sao chép từng tờ rồi dán ở{' '}
+                    <Link href="/thongke/dan-so">Dán một tờ</Link>.
+                  </div>
+                )}
+                <ol className="sx-mau-b">
+                  <li>Tải file mẫu (nút xanh góc trên phải).</li>
+                  <li>
+                    Điền số ĐẠT trong ngày vào ô vàng; chi tiết mới gõ ở dòng cuối tờ
+                    PHÔI.
+                  </li>
+                  <li>
+                    Tải lên để ghi một lần — <span className="mut">sắp có</span>.
+                  </li>
+                </ol>
               </>
             )}
           </div>

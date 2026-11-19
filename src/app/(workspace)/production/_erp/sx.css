@@ -3118,3 +3118,29 @@
     border-bottom: 1px solid var(--sx-line);
   }
 }
+
+.sx.sx .sx-mau-ps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.sx.sx .sx-mau-p {
+  border: 1px solid var(--sx-line);
+  background: var(--sx-card);
+  color: var(--sx-ink);
+  padding: 2px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+.sx.sx .sx-mau-p:hover,
+.sx.sx .sx-mau-p:focus-visible {
+  border-color: var(--sx-act);
+  background: var(--sx-act-wash);
+}
+.sx.sx .sx-mau-b {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: var(--sx-ink2);
+  display: grid;
+  gap: 2px;
+}

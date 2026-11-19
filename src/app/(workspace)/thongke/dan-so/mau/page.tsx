@@ -1,7 +1,9 @@
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isProductionStaff } from '@/modules/dept/production/perms'
 import { danSoService } from '@/modules/dept/production/dan-so.service'
+import { COOKIE_LENH } from '@/lib/lenh-nho'
 import { MauScreen } from './MauScreen'
 
 export const dynamic = 'force-dynamic'
@@ -16,5 +18,6 @@ export default async function MauPage() {
   const duocGhi = user.role === 'admin' || (await isProductionStaff(user))
   if (!duocGhi) redirect('/thongke/lenh')
   const opt = await danSoService.tuyChon(user)
-  return <MauScreen opt={opt} />
+  const nho = (await cookies()).get(COOKIE_LENH)?.value ?? null
+  return <MauScreen opt={opt} lenhNho={nho} />
 }

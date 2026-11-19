@@ -22,8 +22,14 @@ import { useDanSo, type DanSoCtx } from './useDanSo'
  * Ba bước trên một màn: Dán → Xem trước → Đã ghi. Việc nặng (khớp chi tiết, tính
  * ô sẽ ghi) ở `dan-so.service`; màn chỉ hiển thị và để người dùng sửa chỗ sai.
  */
-export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
-  const d = useDanSo(opt)
+export function DanSoScreen({
+  opt,
+  lenhNho = null,
+}: {
+  opt: TuyChonDanSo
+  lenhNho?: string | null
+}) {
+  const d = useDanSo(opt, lenhNho)
   const dongSP = d.lenh?.dong ?? []
   const tenLenh = d.lenh?.code ?? ''
   return (
