@@ -19,6 +19,7 @@ import { finishRouteOverride } from '@/lib/finish-stages'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { vnTodayIso } from '@/lib/local-date'
 import type { DanSoInput } from './dan-so.schema'
+import { gopDongMau, ngayTuDen, type MauDong, type MauDongRaw } from '@/lib/dan-so-mau'
 
 /**
  * DÁN SỔ EXCEL (bản vẽ 17/11/2026, https://claude.ai/artifact/TN9FdcN5S1mJBDAvwQcsS4,
@@ -99,6 +100,23 @@ export type KetQuaGhi = {
   phieu: { iso: string; doc_no: string | null; so_o: number; loi: string | null }[]
   moi_tao: number
   canh_bao: string[]
+}
+
+/** File mẫu nhập liệu theo lệnh (bản vẽ v2, 19/11/2026). */
+export type MauLenh = {
+  lsx_id: string
+  lsx_code: string
+  cot: string[]
+  teams: { id: string; name: string; stage: string | null }[]
+  to: {
+    stage: string
+    label: string
+    don_vi: 'chi tiết' | 'cụm'
+    to: { id: string; name: string } | null
+    dong: MauDong[]
+    /** Ô đã có số trong khoảng ngày (cho tổ điền sẵn). */
+    so_o_co: number
+  }[]
 }
 
 export type TuyChonDanSo = {
@@ -191,11 +209,12 @@ function taoLuotDi(
     }
     return p
   }
-  return (c: ComponentRow): string | null => {
-    const eff =
-      finishRouteOverride(c, counting.finish) ??
-      planOf(c.production_order_line_id).own_route.get(c.id) ??
-      componentRoute(routeByLine.get(c.production_order_line_id), c)
+  const duongDi = (c: ComponentRow) =>
+    finishRouteOverride(c, counting.finish) ??
+    planOf(c.production_order_line_id).own_route.get(c.id) ??
+    componentRoute(routeByLine.get(c.production_order_line_id), c)
+  const luotDi = (c: ComponentRow): string | null => {
+    const eff = duongDi(c)
     if (eff.length > 0 && !eff.includes(stage)) {
       const ten = (s: string) => stagesCat.find((x) => x.code === s)?.label ?? s
       return `Không đếm ở công đoạn ${label} — khoảng ghi của nó là ${eff
@@ -204,6 +223,9 @@ function taoLuotDi(
     }
     return null
   }
+  /** Chặt hơn `luotDi`: lộ trình PHẢI có công đoạn này (dòng không có lộ trình — gối, bao bì — không vào tờ). */
+  luotDi.coTrong = (c: ComponentRow) => duongDi(c).includes(stage)
+  return luotDi
 }
 
 /** Khớp tên; người dùng đã bấm "thêm mới" thì gần-khớp coi là chi tiết mới. */
@@ -770,6 +792,108 @@ export const danSoService = {
       })
     }
     return { lsx_code: lsx.code, stage_label: stage.label, to }
+  },
+
+  /**
+   * Dữ liệu FILE MẪU của cả lệnh: mỗi công đoạn đếm chi tiết / cụm một tờ; mỗi tờ chỉ có các dòng
+   * đi qua công đoạn đó (lộ trình đã định hình), gộp qua các đợt giao của cùng mã SP.
+   * Công đoạn đếm theo BỘ (lắp ráp, đóng gói…) chưa hỗ trợ — không có tờ.
+   */
+  async mauLenh(
+    user: User,
+    q: { lsx_id: string; ma?: string[]; tu: string; den: string; dien: boolean },
+  ): Promise<MauLenh> {
+    await assertAction(user, 'production.entries.record')
+    const cot = ngayTuDen(q.tu, q.den)
+    if (cot.length === 0) throw BadRequest('Khoảng ngày không hợp lệ')
+    const { lsx, components, lines, stagesCat, existing, routeByLine } = await tai(
+      q.lsx_id,
+    )
+    const cfg = resolveStageConfigs(stagesCat)
+    const counting = countingOf(stagesCat)
+    const depts = (await departmentsRepo.list()).filter(
+      (d) => d.workspace_id === 'production',
+    )
+    const teams = depts.map((d) => ({
+      id: d.id,
+      name: d.name,
+      stage: resolveTeamStage(d, stagesCat),
+    }))
+    const lineOk = new Map(
+      lines
+        .filter(
+          (l) => !q.ma?.length || q.ma.some((m) => chuan(m) === chuan(l.product_code)),
+        )
+        .map((l) => [l.id, l]),
+    )
+    const cotSet = new Set(cot)
+    const to: MauLenh['to'] = []
+    for (const st of stagesCat) {
+      const level = cfg.find((c) => c.code === st.code)?.meta.count_level
+      if (level !== 'part' && level !== 'cluster') continue
+      const luotDi = taoLuotDi(components, routeByLine, counting, stagesCat, st.code)
+      const dem = new Map<string, number>()
+      for (const e of existing) {
+        if (e.stage === st.code && e.team_department_id) {
+          dem.set(e.team_department_id, (dem.get(e.team_department_id) ?? 0) + 1)
+        }
+      }
+      const cuaCd = teams.filter((t) => t.stage === st.code || (dem.get(t.id) ?? 0) > 0)
+      // Tổ điền sẵn: tổ đã ghi NHIỀU NHẤT ở công đoạn này của lệnh, chưa có thì tổ đầu tiên của công đoạn.
+      const toMd =
+        [...cuaCd].sort((a, b) => (dem.get(b.id) ?? 0) - (dem.get(a.id) ?? 0))[0] ?? null
+      const daLam = new Map<string, number>()
+      const theoNgay = new Map<string, number>()
+      for (const e of existing) {
+        if (e.stage !== st.code) continue
+        daLam.set(e.component_id, (daLam.get(e.component_id) ?? 0) + Number(e.qty))
+        if (
+          q.dien &&
+          toMd &&
+          e.team_department_id === toMd.id &&
+          cotSet.has(e.entry_date)
+        ) {
+          const k = `${e.component_id}|${e.entry_date}`
+          theoNgay.set(k, (theoNgay.get(k) ?? 0) + Number(e.qty))
+        }
+      }
+      const raw: MauDongRaw[] = []
+      for (const c of components) {
+        const line = lineOk.get(c.production_order_line_id)
+        if (!line || (c.kind !== 'part' && c.kind !== 'assembly') || !luotDi.coTrong(c))
+          continue
+        const o: Record<string, number> = {}
+        for (const iso of cot) {
+          const v = theoNgay.get(`${c.id}|${iso}`)
+          if (v) o[iso] = v
+        }
+        raw.push({
+          ma: line.product_code,
+          ten_sp: line.name_vi ?? line.name_foreign ?? null,
+          cum: c.kind === 'assembly' ? c.name : (c.cluster ?? null),
+          ten: c.name,
+          ct_sp: Number(c.qty_per_unit),
+          can: calcComponent(
+            { qty_per_unit: c.qty_per_unit, dm_kg: c.dm_kg, pcs_per_bar: c.pcs_per_bar },
+            line.qty,
+          ).total_needed,
+          da_lam: daLam.get(c.id) ?? 0,
+          o,
+          thu_tu: c.sort_order,
+        })
+      }
+      const dong = gopDongMau(raw)
+      if (dong.length === 0) continue
+      to.push({
+        stage: st.code,
+        label: st.label,
+        don_vi: level === 'cluster' ? 'cụm' : 'chi tiết',
+        to: toMd ? { id: toMd.id, name: toMd.name } : null,
+        dong,
+        so_o_co: dong.reduce((a, d) => a + Object.keys(d.o).length, 0),
+      })
+    }
+    return { lsx_id: q.lsx_id, lsx_code: lsx.code, cot, teams, to }
   },
 
   async xem(user: User, input: DanSoInput): Promise<XemDanSo> {

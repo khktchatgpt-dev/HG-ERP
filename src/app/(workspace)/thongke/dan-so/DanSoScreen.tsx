@@ -56,6 +56,11 @@ export function DanSoScreen({ opt }: { opt: TuyChonDanSo }) {
               )}
               {d.buoc === 'dan' && (
                 <ApNhom>
+                  <ApNut href="/thongke/dan-so/mau">File mẫu cả lệnh</ApNut>
+                </ApNhom>
+              )}
+              {d.buoc === 'dan' && (
+                <ApNhom>
                   <ApNut primary onClick={d.xemTruoc} why={d.thieu}>
                     Xem trước
                   </ApNut>
