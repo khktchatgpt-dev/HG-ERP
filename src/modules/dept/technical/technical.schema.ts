@@ -174,6 +174,11 @@ export const productShowroomSchema = z
     message: 'Không có gì để đổi',
   })
 
+/** Đánh dấu "đã treo thẻ" hàng loạt từ màn In thẻ treo (bản vẽ 19/11/2026, Q6). */
+export const productTreoTheSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, 'Chưa chọn SP nào').max(2000),
+})
+
 export const productLockSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
 })

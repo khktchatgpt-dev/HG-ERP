@@ -9115,6 +9115,8 @@ export type Database = {
           shipping_mark: string | null
           showroom_sample: boolean
           showroom_tagged_at: string | null
+          showroom_shelf: string | null
+          showroom_zone: string | null
           stage_route: Json | null
           tech_spec: Json
           thickness_mm: number | null
@@ -9203,6 +9205,8 @@ export type Database = {
           shipping_mark?: string | null
           showroom_sample?: boolean
           showroom_tagged_at?: string | null
+          showroom_shelf?: string | null
+          showroom_zone?: string | null
           stage_route?: Json | null
           tech_spec?: Json
           thickness_mm?: number | null
@@ -9291,6 +9295,8 @@ export type Database = {
           shipping_mark?: string | null
           showroom_sample?: boolean
           showroom_tagged_at?: string | null
+          showroom_shelf?: string | null
+          showroom_zone?: string | null
           stage_route?: Json | null
           tech_spec?: Json
           thickness_mm?: number | null

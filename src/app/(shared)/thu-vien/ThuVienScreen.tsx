@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
-import { FileSpreadsheet, FileUp, Plus } from 'lucide-react'
+import { FileSpreadsheet, FileUp, Plus, Tag } from 'lucide-react'
 import { BomAiNewProduct } from '@/components/technical/BomAiNewProduct'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { Modal } from '@/components/Modal'
@@ -20,6 +20,7 @@ import {
   type ThuVienFilters,
 } from './thu-vien.shared'
 import { useThuVien } from './useThuVien'
+import { locQuery } from './thu-vien.filters'
 import { useXuatExcel } from '@/components/technical/useXuatExcel'
 
 /**
@@ -55,22 +56,6 @@ function Fact({
 }
 
 const EXPORT_URL = '/api/dept/technical/products/sp-excel/export'
-
-/** Bộ lọc đang xem → query cho route xuất Excel (đúng tham số URL của trang). */
-function excelQuery(f: ThuVienFilters): string {
-  const p = new URLSearchParams()
-  if (f.q) p.set('q', f.q)
-  if (f.kh) p.set('kh', f.kh)
-  if (f.loai) p.set('loai', f.loai)
-  if (f.khung) p.set('khung', f.khung)
-  if (f.thieu) p.set('thieu', f.thieu)
-  if (f.kt) p.set('kt', '1')
-  p.set('tt', f.tt)
-  if (f.lenh) p.set('lenh', '1')
-  if (f.mau) p.set('mau', '1')
-  if (f.the) p.set('the', '1')
-  return p.toString()
-}
 
 export function ThuVienScreen({
   rows,
@@ -163,60 +148,70 @@ export function ThuVienScreen({
             />
           )}
         </div>
-        {canEdit && (
-          <div className="head-r">
-            <details className="dd">
-              <summary
-                className="btn"
-                title="Thêm / cập nhật SP bằng file Excel"
-                aria-busy={xe.busy}
-              >
-                <FileSpreadsheet size={14} aria-hidden />
-                <span className="t">{xe.busy ? 'Đang tạo file…' : 'Excel'}</span> ▾
-              </summary>
-              <div className="dd-m">
-                <a href={`${EXPORT_URL}?blank=1`}>Tải file mẫu trống</a>
-                <a
-                  href={`${EXPORT_URL}?${excelQuery(filters)}`}
-                  aria-disabled={xe.busy}
-                  onClick={(e) => {
-                    // Gọi qua hook để bày "Đang tạo file…" + chặn bấm lại (~20 giây).
-                    e.preventDefault()
-                    e.currentTarget.closest('details')?.removeAttribute('open')
-                    void xe.xuat(`${EXPORT_URL}?${excelQuery(filters)}`)
-                  }}
+        <div className="head-r">
+          <Link
+            className="btn"
+            href={`/thu-vien/in-the?${locQuery(filters)}`}
+            title="In thẻ treo mẫu showroom cho các SP đang lọc"
+          >
+            <Tag size={14} aria-hidden />
+            <span className="t">In thẻ treo</span>
+          </Link>
+          {canEdit && (
+            <>
+              <details className="dd">
+                <summary
+                  className="btn"
+                  title="Thêm / cập nhật SP bằng file Excel"
+                  aria-busy={xe.busy}
                 >
-                  {xe.busy ? 'Đang tạo file…' : 'Xuất SP đang lọc (kèm ảnh)'}
-                </a>
-                <Link href="/thu-vien/nhap-excel">Nhập file đã sửa…</Link>
-              </div>
-            </details>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => d.setFromBom(true)}
-              title="Tạo sản phẩm từ file BOM"
-            >
-              <FileUp size={14} aria-hidden />
-              <span className="t">Tạo từ file BOM</span>
-            </button>
-            <button
-              type="button"
-              className="btn pri"
-              title="Thêm sản phẩm"
-              onClick={() => d.setTaoMoi(true)}
-            >
-              <Plus size={14} aria-hidden />
-              <span className="t">Thêm sản phẩm</span>
-            </button>
-          </div>
-        )}
+                  <FileSpreadsheet size={14} aria-hidden />
+                  <span className="t">{xe.busy ? 'Đang tạo file…' : 'Excel'}</span> ▾
+                </summary>
+                <div className="dd-m">
+                  <a href={`${EXPORT_URL}?blank=1`}>Tải file mẫu trống</a>
+                  <a
+                    href={`${EXPORT_URL}?${locQuery(filters)}`}
+                    aria-disabled={xe.busy}
+                    onClick={(e) => {
+                      // Gọi qua hook để bày "Đang tạo file…" + chặn bấm lại (~20 giây).
+                      e.preventDefault()
+                      e.currentTarget.closest('details')?.removeAttribute('open')
+                      void xe.xuat(`${EXPORT_URL}?${locQuery(filters)}`)
+                    }}
+                  >
+                    {xe.busy ? 'Đang tạo file…' : 'Xuất SP đang lọc (kèm ảnh)'}
+                  </a>
+                  <Link href="/thu-vien/nhap-excel">Nhập file đã sửa…</Link>
+                </div>
+              </details>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => d.setFromBom(true)}
+                title="Tạo sản phẩm từ file BOM"
+              >
+                <FileUp size={14} aria-hidden />
+                <span className="t">Tạo từ file BOM</span>
+              </button>
+              <button
+                type="button"
+                className="btn pri"
+                title="Thêm sản phẩm"
+                onClick={() => d.setTaoMoi(true)}
+              >
+                <Plus size={14} aria-hidden />
+                <span className="t">Thêm sản phẩm</span>
+              </button>
+            </>
+          )}
+        </div>
       </header>
       {/* Xuất Excel đang chạy / xong / lỗi — báo TẠI CHỖ, không để màn đứng im. */}
       {(xe.busy || xe.err || xe.xong != null) && (
-        <div className={xe.err ? "notice red" : "notice"} role="status">
+        <div className={xe.err ? 'notice red' : 'notice'} role="status">
           {xe.busy
-            ? "Đang tạo file Excel kèm ảnh — khoảng 20 giây cho cả thư viện, đừng bấm lại."
+            ? 'Đang tạo file Excel kèm ảnh — khoảng 20 giây cho cả thư viện, đừng bấm lại.'
             : xe.err
               ? xe.err
               : `Đã tạo file ${xe.xong} SP — trình duyệt đang tải về (xem thư mục Tải xuống).`}

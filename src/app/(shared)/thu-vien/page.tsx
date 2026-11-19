@@ -2,11 +2,9 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { canEditProducts } from '@/modules/dept/technical/technical.service'
 import { libraryService } from '@/modules/dept/technical/library.service'
-import { PRODUCT_TYPE_CODES, FRAME_MATERIALS } from '@/lib/product-code'
-import { isThieuFilter } from '@/lib/ho-so-sp'
 import { ThuVienScreen } from './ThuVienScreen'
 import { PAGE_SIZE } from './thu-vien.const'
-import type { ThuVienFilters } from './thu-vien.shared'
+import { docLocThuVien, thamSo } from './thu-vien.filters'
 
 /**
  * THƯ VIỆN SẢN PHẨM — khuôn C · Danh sách (dựng lại 08/10/2026 theo bản vẽ
@@ -32,26 +30,8 @@ export default async function ThuVienSanPhamPage({
     searchParams,
   ])
 
-  const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? ''
-  const loaiRaw = str(sp.loai).toUpperCase()
-  const khungRaw = str(sp.khung).toUpperCase()
-  const thieuRaw = str(sp.thieu)
-  const ttRaw = str(sp.tt)
-  const filters: ThuVienFilters = {
-    q: str(sp.q).trim(),
-    kh: str(sp.kh),
-    // Mã lạ trên URL coi như không lọc — không trả 0 dòng khó hiểu.
-    loai: PRODUCT_TYPE_CODES.includes(loaiRaw as never) ? loaiRaw : '',
-    khung: FRAME_MATERIALS.some((m) => m.code === khungRaw) ? khungRaw : '',
-    thieu: isThieuFilter(thieuRaw) ? thieuRaw : '',
-    kt: str(sp.kt) === '1',
-    tt: ttRaw === 'inactive' || ttRaw === 'all' ? ttRaw : 'active',
-    lenh: str(sp.lenh) === '1',
-    mau: str(sp.mau) === '1',
-    the: str(sp.the) === '1',
-    gia: canPrice && str(sp.gia) === '1',
-  }
-  const page = Math.max(1, Number(str(sp.trang)) || 1)
+  const filters = docLocThuVien(sp, canPrice)
+  const page = Math.max(1, Number(thamSo(sp.trang)) || 1)
 
   const data = await libraryService.listPage(
     user,
