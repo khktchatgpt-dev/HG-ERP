@@ -681,8 +681,8 @@ export const productsService = {
   async setShowroom(
     user: User,
     id: string,
-    input: { co_mau?: boolean; treo_the?: boolean },
-  ): Promise<Pick<Product, 'showroom_sample' | 'showroom_tagged_at'>> {
+    input: { co_mau?: boolean; treo_the?: boolean; khu?: string | null },
+  ): Promise<Pick<Product, 'showroom_sample' | 'showroom_tagged_at' | 'showroom_zone'>> {
     await assertAction(user, 'technical.product.update')
     const before = await productsRepo.findById(id)
     if (!before) throw NotFound('Không tìm thấy sản phẩm')
@@ -696,10 +696,12 @@ export const productsService = {
     const after = await productsRepo.patch(id, {
       showroom_sample: coMau,
       showroom_tagged_at: tagged,
+      ...(input.khu !== undefined ? { showroom_zone: input.khu } : {}),
     })
     return {
       showroom_sample: after.showroom_sample,
       showroom_tagged_at: after.showroom_tagged_at,
+      showroom_zone: after.showroom_zone,
     }
   },
 

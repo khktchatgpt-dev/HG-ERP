@@ -387,6 +387,10 @@ export const spExcelService = {
         let saved = created
         if (Object.keys(rest).length)
           saved = await productsService.update(user, created.id, rest as never)
+        if ('showroom_zone' in r.write)
+          await productsService.setShowroom(user, created.id, {
+            khu: (r.write.showroom_zone as string | null) ?? null,
+          })
         if (r.pk) await writePacking(user, created.id, r.pk, undefined)
         const ref = await attachImage(r, created.id, created.code)
         out.push({
@@ -399,6 +403,10 @@ export const spExcelService = {
         })
       } else {
         const patch: Record<string, unknown> = { ...r.write }
+        // Khu showroom ghi qua setShowroom (cùng đường ô chọn trên hồ sơ), không qua update.
+        const khu = 'showroom_zone' in patch ? ((patch.showroom_zone as string | null) ?? null) : undefined
+        delete patch.showroom_zone
+        if (khu !== undefined) await productsService.setShowroom(user, r.id!, { khu })
         if (tech) patch.tech_spec = tech
         let saved = Object.keys(patch).length
           ? await productsService.update(user, r.id!, patch as never)

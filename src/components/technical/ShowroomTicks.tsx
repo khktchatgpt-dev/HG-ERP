@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
+import { SHOWROOM_ZONES } from '@/lib/showroom'
 
 /**
  * Hai ô tick mẫu showroom (0303, phiếu 101026 PKD): "Có mẫu" · "Đã treo thẻ".
@@ -20,6 +21,7 @@ export function ShowroomTicks({
   canEdit,
   compact,
   bare,
+  khu,
 }: {
   productId: string
   coMau: boolean
@@ -29,6 +31,11 @@ export function ShowroomTicks({
   compact?: boolean
   /** Chỉ hai ô tick, không chữ — tiêu đề cột đã nói ("Mẫu · Thẻ"). */
   bare?: boolean
+  /**
+   * Khu showroom (0304). Truyền (kể cả null) thì bày ô chọn Khu cạnh hai ô tick —
+   * dùng ở hồ sơ SP; bảng danh sách không truyền.
+   */
+  khu?: string | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -45,9 +52,18 @@ export function ShowroomTicks({
   const co = local?.co ?? coMau
   const tag = local?.tag ?? !!taggedAt
 
-  async function save(body: { co_mau?: boolean; treo_the?: boolean }) {
+  const [khuLocal, setKhuLocal] = useState<string | null | undefined>(undefined)
+  const [seenKhu, setSeenKhu] = useState(khu)
+  if (seenKhu !== khu) {
+    setSeenKhu(khu)
+    setKhuLocal(undefined)
+  }
+  const khuNow = khuLocal !== undefined ? khuLocal : (khu ?? null)
+
+  async function save(body: { co_mau?: boolean; treo_the?: boolean; khu?: string | null }) {
     if (busy) return
-    setLocal({
+    if (body.khu !== undefined) setKhuLocal(body.khu)
+    else setLocal({
       co: body.treo_the ? true : (body.co_mau ?? co),
       tag: body.co_mau === false ? false : (body.treo_the ?? tag),
     })
@@ -61,6 +77,7 @@ export function ShowroomTicks({
       router.refresh()
     } catch (e) {
       setLocal(null)
+      setKhuLocal(undefined)
       setErr(apiErrorText(e))
     } finally {
       setBusy(false)
@@ -122,6 +139,25 @@ export function ShowroomTicks({
             )}
           </span>
         </label>
+        {khu !== undefined && (
+          <label className="inline-flex items-center gap-1.5" title={noQuyen}>
+            <span>Khu</span>
+            <select
+              className="h-7 border border-[var(--line,#c9d0db)] bg-transparent px-1"
+              value={khuNow ?? ''}
+              disabled={disabled}
+              onChange={(e) => void save({ khu: e.currentTarget.value || null })}
+              aria-label="Khu showroom"
+            >
+              <option value="">—</option>
+              {SHOWROOM_ZONES.map((z) => (
+                <option key={z} value={z}>
+                  {z}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </span>
       {err && <span className="text-xs text-[var(--stop)]">{err}</span>}
     </span>

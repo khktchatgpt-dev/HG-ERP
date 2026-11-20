@@ -89,6 +89,7 @@ export function toHoSoView(d: HoSoData) {
     files: d.files,
     hasSample: d.hasSample,
     taggedAt: d.taggedAt,
+    khu: d.khu,
     check: d.check,
     diem: d.diem,
     thieuSo: d.thieuSo,

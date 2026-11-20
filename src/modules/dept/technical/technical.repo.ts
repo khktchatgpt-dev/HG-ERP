@@ -65,6 +65,8 @@ export type Product = {
   showroom_sample: boolean
   /** Ngày treo thẻ showroom (0303) — null = chưa treo. */
   showroom_tagged_at: string | null
+  /** Khu mẫu trong showroom (0304) — A1…K2, null = chưa ghi. */
+  showroom_zone: string | null
   reference_price: number | null
   /*
    * CỐ Ý KHÔNG có plan_* (giá thành kế hoạch, 0220) ở đây: đó là số riêng của
@@ -182,7 +184,7 @@ export type ProductWrite = Partial<Omit<Product, 'lifecycle' | 'created_by'>>
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, showroom_tagged_at, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, sample_confirmed_at, sample_confirmed_by, sample_note, owner_id, created_by, lifecycle, lifecycle_at, lifecycle_by, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, showroom_tagged_at, showroom_zone, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, sample_confirmed_at, sample_confirmed_by, sample_note, owner_id, created_by, lifecycle, lifecycle_at, lifecycle_by, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */

@@ -12,10 +12,10 @@
  *    thành 1,94.
  */
 import QRCode from 'qrcode'
+import { SHOWROOM_ZONES, type ShowroomZone } from './showroom'
 
 /** Khu showroom (0304) — thứ tự in / sắp xếp. */
-export const SHOWROOM_ZONES = ['A1', 'A2', 'B1', 'B2', 'C', 'K1', 'K2'] as const
-export type ShowroomZone = (typeof SHOWROOM_ZONES)[number]
+export { SHOWROOM_ZONES, type ShowroomZone } from './showroom'
 
 /** Số thẻ mỗi tờ A4: 2 = A5 dọc (A4 ngang, mặc định), 4 = A6 (A4 dọc). */
 export type TheMoiTo = 2 | 4

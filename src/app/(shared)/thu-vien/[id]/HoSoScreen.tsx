@@ -365,6 +365,7 @@ export function HoSoScreen({
                   productId={d.id}
                   coMau={d.hasSample}
                   taggedAt={d.taggedAt}
+                  khu={d.khu}
                   canEdit={canEdit}
                   compact
                 />

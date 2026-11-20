@@ -42,6 +42,7 @@ const keros: ExistingSp = {
   is_active: true,
   showroom_sample: true,
   showroom_tagged_at: '2026-11-17T17:30:00Z',
+  showroom_zone: 'A1',
   locked_at: null,
   updated_at: '2026-10-08T00:00:00Z',
   image_file_id: 'f1',
@@ -196,5 +197,36 @@ describe('sp-excel', () => {
     const r = planRows([row({ code: 'CH0195HG-IN', product_type: 'TB' })], [keros])
     expect(r.rows[0].action).toBe('update')
     expect(r.rows[0].warnings.join(' ')).toMatch(/không đổi theo/)
+  })
+})
+
+describe('cột Vị trí showroom (0304)', () => {
+  it('xuất đúng khu đang có', () => {
+    expect(currentValue(keros, 'showroom_zone')).toBe('A1')
+  })
+  it('đổi khu hợp lệ (gõ thường, có khoảng trắng vẫn nhận)', () => {
+    const [r] = planRows(
+      [row({ code: 'CH0195HG-IN', showroom_zone: ' b2 ' })],
+      [keros],
+    ).rows
+    expect(r.action).toBe('update')
+    expect(r.write.showroom_zone).toBe('B2')
+    expect(r.changes.map((c) => [c.label, c.old, c.new])).toEqual([
+      ['Vị trí showroom', 'A1', 'B2'],
+    ])
+  })
+  it('khu ngoài danh sách là lỗi; "-" xoá trắng; trùng khu thì không đổi', () => {
+    expect(
+      planRows([row({ code: 'CH0195HG-IN', showroom_zone: 'Z9' })], [keros]).rows[0]
+        .errors[0],
+    ).toMatch(/A1, A2, B1/)
+    expect(
+      planRows([row({ code: 'CH0195HG-IN', showroom_zone: '-' })], [keros]).rows[0].write
+        .showroom_zone,
+    ).toBeNull()
+    expect(
+      planRows([row({ code: 'CH0195HG-IN', showroom_zone: 'A1' })], [keros]).rows[0]
+        .action,
+    ).toBe('unchanged')
   })
 })

@@ -64,6 +64,8 @@ export type ProductView = {
   showroom_sample: boolean
   /** Ngày treo thẻ showroom (0303) — tick ngay trên tab Thông số, không qua form. */
   showroom_tagged_at: string | null
+  /** Khu showroom (0304) — chọn ngay cạnh hai ô tick. */
+  showroom_zone: string | null
   reference_price: number | null
   tech_spec: TechSpec
   hs_code: string | null
@@ -124,6 +126,7 @@ export function toProductView(p: Product): ProductView {
     barcode: p.barcode,
     showroom_sample: p.showroom_sample,
     showroom_tagged_at: p.showroom_tagged_at,
+    showroom_zone: p.showroom_zone ?? null,
     reference_price: p.reference_price,
     tech_spec: p.tech_spec ?? {},
     hs_code: p.hs_code,

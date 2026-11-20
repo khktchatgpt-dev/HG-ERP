@@ -77,6 +77,8 @@ export type HoSoData = {
   hasSample: boolean
   /** Ngày treo thẻ showroom (0303) — null = chưa treo. */
   taggedAt: string | null
+  /** Khu showroom (0304). */
+  khu: string | null
   check: HoSoCheck
   diem: { co: number; apDung: number }
   thieuSo: PartMissing[]
@@ -207,6 +209,7 @@ export const profileService = {
       }),
       hasSample,
       taggedAt: product.showroom_tagged_at,
+      khu: product.showroom_zone ?? null,
       check,
       diem: hoSoDiem(check),
       thieuSo: partsThieuSo(parts),

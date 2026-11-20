@@ -1,5 +1,6 @@
 import { FRAME_MATERIALS, PRODUCT_TYPES } from './product-code'
 import { normalizeCustomerLabel } from './customer-label'
+import { SHOWROOM_ZONES, isShowroomZone } from './showroom'
 
 /**
  * THÊM + CẬP NHẬT SẢN PHẨM BẰNG MỘT FILE EXCEL (09/10/2026) — luật thuần,
@@ -41,6 +42,8 @@ export type ColKind =
   | 'hidden'
   /** CHỈ XEM (mẫu showroom 0303): xuất ra, đọc lại thì BỎ QUA — tick trên ERP. */
   | 'info'
+  /** Khu showroom (0304) — chọn trong `SHOWROOM_ZONES`. */
+  | 'zone'
 export type SpCol = {
   key: string
   group: string
@@ -56,7 +59,7 @@ const G2 = 'KÍCH THƯỚC · KHỐI LƯỢNG'
 const G3 = 'ĐÓNG GÓI (phương án mặc định)'
 const G4 = 'THÔNG SỐ IN LSX'
 const G5 = 'KHÁC'
-const G6 = 'SHOWROOM (chỉ xem)'
+const G6 = 'SHOWROOM'
 export const SP_COLS: SpCol[] = [
   {
     key: 'code',
@@ -203,6 +206,15 @@ export const SP_COLS: SpCol[] = [
     width: 12,
     kind: 'info',
   },
+  // Khu showroom (0304) — SỬA ĐƯỢC qua file (20/11/2026: chỉ khu, không dãy kệ).
+  {
+    key: 'showroom_zone',
+    group: G6,
+    header: 'Vị trí showroom',
+    note: 'chọn: A1, A2, B1, B2, C, K1, K2',
+    width: 12,
+    kind: 'zone',
+  },
   {
     key: 'version',
     group: '',
@@ -332,6 +344,8 @@ export type ExistingSp = {
   /** Mẫu showroom (0303) — chỉ để xuất. */
   showroom_sample: boolean
   showroom_tagged_at: string | null
+  /** Khu showroom (0304). */
+  showroom_zone: string | null
   locked_at: string | null
   updated_at: string
   image_file_id: string | null
@@ -505,6 +519,14 @@ export function planRows(
             write[k] = v
             if (p) put(k, cur, v)
           }
+        }
+      } else if (col.kind === 'zone') {
+        const v = clear ? null : s.toUpperCase().replace(/s+/g, '')
+        if (v != null && !isShowroomZone(v))
+          errors.push(`${lbl(k)} "${s}" — chọn một trong ${SHOWROOM_ZONES.join(', ')}`)
+        else if (!p || !sameStr(v, p.showroom_zone)) {
+          write.showroom_zone = v
+          if (p) put(k, p.showroom_zone, v)
         }
       } else if (col.kind === 'bool') {
         const v = clear ? null : parseBool(s)

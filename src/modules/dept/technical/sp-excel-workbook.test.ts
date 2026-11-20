@@ -26,6 +26,7 @@ const sp: ExistingSp = {
   is_active: true,
   showroom_sample: true,
   showroom_tagged_at: '2026-11-18T02:00:00Z',
+  showroom_zone: null,
   locked_at: null,
   updated_at: '2026-11-18T02:00:00Z',
   image_file_id: null,

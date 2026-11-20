@@ -16,6 +16,7 @@ import {
   type RawRow,
 } from '@/lib/sp-excel'
 import { cellValue } from './bom-workbook'
+import { SHOWROOM_ZONES } from '@/lib/showroom'
 
 /**
  * FILE EXCEL của luồng thêm + cập nhật SP (09/10/2026) — ghi file xuất (ảnh
@@ -134,6 +135,7 @@ export async function buildSpWorkbook(
     ['Khách / nhóm', [...customers]],
     ['ĐVT', ['cái', 'bộ']],
     ['Có / không', ['có', 'không']],
+    ['Khu showroom', [...SHOWROOM_ZONES]],
   ]
   lists.columns = listCols.map(() => ({ width: 28 }))
   listCols.forEach(([t, vals], i) => {
@@ -156,6 +158,7 @@ export async function buildSpWorkbook(
     cust: dv(3, customers.length, false),
     unit: dv(4, 2, false),
     bool: dv(5, 2, false),
+    zone: dv(6, SHOWROOM_ZONES.length, true),
   }
   SP_COLS.forEach((c, i) => {
     const v = kinds[c.kind]

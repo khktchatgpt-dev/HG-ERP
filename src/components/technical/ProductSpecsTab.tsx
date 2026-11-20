@@ -174,6 +174,7 @@ export function ProductSpecsTab({
           productId={product.id}
           coMau={product.showroom_sample}
           taggedAt={product.showroom_tagged_at}
+          khu={product.showroom_zone}
           canEdit={canEdit}
         />
       </div>

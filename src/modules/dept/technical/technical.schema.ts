@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { normalizeCustomerLabel } from '@/lib/customer-label'
 import { FRAME_MATERIAL_CODES, PRODUCT_TYPE_CODES } from '@/lib/product-code'
+import { SHOWROOM_ZONES } from '@/lib/showroom'
 import { LIFECYCLES } from '@/lib/product-lifecycle'
 
 /**
@@ -169,8 +170,13 @@ export const productUpdateSchema = productCreateSchema.partial().extend({
  */
 /** Tick mẫu showroom (0303): có mẫu / đã treo thẻ — gửi ô nào đổi thì ô đó. */
 export const productShowroomSchema = z
-  .object({ co_mau: z.boolean().optional(), treo_the: z.boolean().optional() })
-  .refine((v) => v.co_mau !== undefined || v.treo_the !== undefined, {
+  .object({
+    co_mau: z.boolean().optional(),
+    treo_the: z.boolean().optional(),
+    /** Khu showroom (0304); null = xoá khu. */
+    khu: z.enum(SHOWROOM_ZONES).nullable().optional(),
+  })
+  .refine((v) => v.co_mau !== undefined || v.treo_the !== undefined || v.khu !== undefined, {
     message: 'Không có gì để đổi',
   })
 
