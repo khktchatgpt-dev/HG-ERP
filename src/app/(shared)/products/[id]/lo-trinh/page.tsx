@@ -4,7 +4,7 @@ import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { canEditBom, productsService } from '@/modules/dept/technical/technical.service'
 import { resolveStageConfigs } from '@/lib/stage-config'
 import { HttpError } from '@/server/http'
-import { LoTrinhScreen } from './LoTrinhScreen'
+import { LoTrinhScreen } from '@/app/(shared)/thu-vien/[id]/lo-trinh/LoTrinhScreen'
 
 /**
  * Tab LỘ TRÌNH (0288, B2 — docs/san-xuat-cau-hinh-thiet-ke.md, bản vẽ C2).

@@ -5,13 +5,19 @@
 
 import type { HoSoData } from '@/modules/dept/technical/profile.service'
 import { SHAPE_OPTIONS } from '@/lib/bom-calc'
+import type { StageConfig } from '@/lib/stage-config'
 
 export type HoSoView = ReturnType<typeof toHoSoView>
 
 /** Chỉ truyền xuống client thứ màn cần — `Product` đầy đủ 80 cột, phần lớn không bày. */
 export function toHoSoView(
   d: HoSoData,
-  lists: { owners: { id: string; name: string }[] } = { owners: [] },
+  lists: {
+    owners: { id: string; name: string }[]
+    /** Công đoạn (đã đọc cấu hình) + vết lộ trình — tab Lộ trình (B5). */
+    stageCfgs?: StageConfig[]
+    routeSource?: { source: string; at: string } | null
+  } = { owners: [] },
 ) {
   const p = d.product
   const ts = (p.tech_spec ?? {}) as Record<string, string | undefined>
@@ -72,6 +78,8 @@ export function toHoSoView(
     ownerName: d.ownerName,
     imageUrl: d.imageUrl,
     imageUrls: d.imageUrls,
+    imageIds: d.imageIds,
+    image_file_id: p.image_file_id,
     parts: d.parts.map((x) => ({
       id: x.id,
       group_code: x.group_code,
@@ -104,7 +112,11 @@ export function toHoSoView(
       id: c.id,
       name: c.name,
       qty_per_product: c.qty_per_product,
+      stages: c.stages ?? null,
     })),
+    stageCfgs: lists.stageCfgs ?? [],
+    routeSource: lists.routeSource ?? null,
+    bom_rev: p.bom_rev ?? null,
     // Công cụ định mức (B3): ba hộp thoại dùng chung cần đủ nhóm (thứ tự, cha),
     // "Tổng hợp vật tư" cần dòng đầy đủ (quy đổi đơn vị mua).
     groupsFull: d.groups.map((g) => ({

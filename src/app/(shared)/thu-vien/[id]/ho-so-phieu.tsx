@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { PenLine, Plus, SlidersHorizontal } from 'lucide-react'
+import { ImageUp, PenLine, Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { uploadFileTracked } from '@/lib/upload'
@@ -18,7 +19,63 @@ import type { HoSoCtx, OChon, OSua } from './useHoSo'
  */
 export function HoSoPhieu({ d, c }: { d: HoSoView; c: HoSoCtx }) {
   const [busyAnh, setBusyAnh] = useState(false)
+  const confirm = useConfirm()
   const themDuoc = c.canEdit && !c.khoa
+  /** Ảnh đang xem (id) — đặt đại diện / xoá (B5, chuyển từ trang cũ 20/11/2026). */
+  const anhId = d.imageIds[c.anh] ?? null
+  const laDaiDien = !!anhId && anhId === d.image_file_id
+
+  async function datDaiDien() {
+    if (!anhId || laDaiDien) return
+    setBusyAnh(true)
+    try {
+      await api(`/api/dept/technical/products/${d.id}`, {
+        method: 'PATCH',
+        body: { image_file_id: anhId },
+      })
+      c.toast.success('Đã đặt làm ảnh đại diện')
+      c.setAnh(0)
+      c.router.refresh()
+    } catch (e) {
+      c.toast.error('Chưa đổi được', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusyAnh(false)
+    }
+  }
+
+  async function xoaAnh() {
+    if (!anhId) return
+    const ok = await confirm({
+      title: 'Xoá ảnh này?',
+      description: laDaiDien
+        ? d.imageIds.length > 1
+          ? 'Đây là ảnh đại diện — ảnh kế tiếp sẽ thành ảnh đại diện. Ảnh bị xoá hẳn, không khôi phục được.'
+          : 'Đây là ảnh duy nhất — SP sẽ không còn ảnh đại diện. Ảnh bị xoá hẳn, không khôi phục được.'
+        : 'Ảnh bị xoá hẳn, không khôi phục được.',
+      tone: 'danger',
+      confirmLabel: 'Xoá ảnh',
+    })
+    if (!ok) return
+    setBusyAnh(true)
+    try {
+      // Đổi đại diện TRƯỚC rồi mới xoá file — không để SP trỏ vào file đã mất.
+      if (laDaiDien) {
+        const ke = d.imageIds.find((x) => x !== anhId) ?? null
+        await api(`/api/dept/technical/products/${d.id}`, {
+          method: 'PATCH',
+          body: { image_file_id: ke },
+        })
+      }
+      await api(`/api/files/${anhId}`, { method: 'DELETE' })
+      c.toast.success('Đã xoá ảnh')
+      c.setAnh(0)
+      c.router.refresh()
+    } catch (e) {
+      c.toast.error('Chưa xoá được', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusyAnh(false)
+    }
+  }
 
   async function themAnh(f: File | null | undefined) {
     if (!f) return
@@ -111,8 +168,35 @@ export function HoSoPhieu({ d, c }: { d: HoSoView; c: HoSoCtx }) {
         </div>
         <div className="muted" style={{ fontSize: 11 }}>
           {d.imageUrls.length} ảnh · ảnh đầu là ảnh đại diện
-          {busyAnh ? ' · đang tải…' : ''}
+          {busyAnh ? ' · đang xử lý…' : ''}
         </div>
+        {/* Chỉ ở chế độ sửa: nút xoá không nằm sẵn khi chỉ đang xem. */}
+        {c.suaDuoc && anhId && (
+          <div className="anh-tt">
+            {laDaiDien ? (
+              <span className="muted">Đang xem ảnh đại diện</span>
+            ) : (
+              <button
+                type="button"
+                className="btn sm"
+                disabled={busyAnh}
+                onClick={() => void datDaiDien()}
+              >
+                <ImageUp size={13} aria-hidden />
+                Đặt làm đại diện
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn sm del"
+              disabled={busyAnh}
+              onClick={() => void xoaAnh()}
+            >
+              <Trash2 size={13} aria-hidden />
+              Xoá ảnh này
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="card" aria-label="Thông số kỹ thuật">

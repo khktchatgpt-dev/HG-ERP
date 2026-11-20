@@ -6,6 +6,8 @@ import { api, ApiError } from '@/lib/api'
 import { DOC_TYPE_LABEL, type DocType } from '@/lib/file-limits'
 import { uploadFileTracked } from '@/lib/upload'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { FilePreviewDialog } from '@/components/technical/FilePreviewDialog'
+import type { ProductFile } from '@/components/technical/product-files'
 import { dmyShort, type HoSoView } from './ho-so.shared'
 import { OTxt } from './ho-so-o'
 import type { HoSoCtx } from './useHoSo'
@@ -47,6 +49,9 @@ export function HoSoTaiLieu({
   canEdit: boolean
 }) {
   const confirm = useConfirm()
+  /** Xem ảnh / PDF ngay trong trang (B5, chuyển từ trang cũ) — file khác thì tải về. */
+  const [xem, setXem] = useState<ProductFile | null>(null)
+  const xemDuoc = (mime: string) => mime.startsWith('image/') || mime === 'application/pdf'
   const inputRef = useRef<HTMLInputElement>(null)
   const [loai, setLoai] = useState<DocType>('drawing')
   const [tienDo, setTienDo] = useState<{ name: string; pct: number } | null>(null)
@@ -199,7 +204,27 @@ export function HoSoTaiLieu({
                   <td className="muted">
                     {f.mime_type.split('/')[1]?.toUpperCase().slice(0, 12)}
                   </td>
-                  <td title={f.filename}>{f.filename}</td>
+                  <td title={f.filename}>
+                    {xemDuoc(f.mime_type) ? (
+                      <button
+                        type="button"
+                        className="lnk"
+                        title="Xem ngay trong trang"
+                        onClick={() =>
+                          setXem({
+                            ...f,
+                            doc_type: f.doc_type as ProductFile['doc_type'],
+                            is_current: false,
+                            owner_name: null,
+                          })
+                        }
+                      >
+                        {f.filename}
+                      </button>
+                    ) : (
+                      f.filename
+                    )}
+                  </td>
                   <td className="num c-md">{kb(f.size_bytes)}</td>
                   <td className="num c-md">{dmyShort(f.created_at)}</td>
                   <td style={{ whiteSpace: 'normal', minWidth: 140 }}>
@@ -235,6 +260,7 @@ export function HoSoTaiLieu({
           ))}
         </table>
       )}
+      <FilePreviewDialog file={xem} onClose={() => setXem(null)} />
     </section>
   )
 }

@@ -288,7 +288,8 @@ export const libraryService = {
       counts.mau[f.has_sample ? 'co' : 'chua']++
       counts.treo[f.showroom_tagged_at ? 'da' : 'chua']++
       counts.anh[f.check.anh === 'thieu' ? 'chua' : 'co']++
-      if (f.plan_price == null) counts.gia++
+      // Đếm "chưa giá" cũng là thông tin giá — chỉ người được xem giá mới nhận.
+      if (canPrice && f.plan_price == null) counts.gia++
     }
 
     // ── lấy trang: lọc TẬP (thiếu/kt/lệnh/mẫu/giá) tính ở app → đưa id xuống DB ──

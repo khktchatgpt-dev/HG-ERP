@@ -3366,3 +3366,16 @@
   min-width: 64px;
   font-size: 16px;
 }
+
+/* B5 (20/11/2026): đặt ảnh đại diện / xoá ảnh dưới khối ảnh hồ sơ. */
+.tv .hs .anh-tt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.tv .hs .lnk:focus-visible {
+  outline: 2px solid var(--act);
+  outline-offset: 2px;
+}

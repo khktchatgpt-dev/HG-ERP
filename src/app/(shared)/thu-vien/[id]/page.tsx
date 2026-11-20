@@ -9,6 +9,9 @@ import {
 } from '@/modules/dept/technical/technical.service'
 import { profileService } from '@/modules/dept/technical/profile.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
+import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
+import { productsService } from '@/modules/dept/technical/technical.service'
+import { resolveStageConfigs } from '@/lib/stage-config'
 import { HttpError } from '@/server/http'
 import { HoSoScreen } from './HoSoScreen'
 import { isHoSoTab } from '@/lib/thu-vien-chuyen'
@@ -46,12 +49,19 @@ export default async function HoSoSanPhamPage({
   // /products cũ nạp, B2 20/11/2026. "Danh mục SP" KHÔNG đưa sang: danh mục
   // product_category rỗng, 0/167 SP dùng (đo 20/11).
   let owners: { id: string; name: string }[] = []
+  let stageCfgs: ReturnType<typeof resolveStageConfigs> = []
+  let routeSource: { source: string; at: string } | null = null
   try {
-    const [hoSo, staff] = await Promise.all([
+    const [hoSo, staff, stageCat, routeSrc] = await Promise.all([
       profileService.hoSo(user, id, canPrice),
       canEdit ? usersRepo.list({ active_only: true }) : Promise.resolve([]),
+      // Tab Lộ trình (B5, chuyển từ /products/<id>/lo-trinh cũ) — chỉ đọc.
+      catalogsService.list(user, 'production_stage'),
+      productsService.latestRouteSource(user, id),
     ])
     data = hoSo
+    stageCfgs = resolveStageConfigs(stageCat.filter((s) => s.is_active))
+    routeSource = routeSrc
     owners = staff.map((u) => ({ id: u.id, name: u.name || u.email }))
   } catch (e) {
     if (e instanceof HttpError && e.status === 404) notFound()
@@ -59,7 +69,7 @@ export default async function HoSoSanPhamPage({
   }
   return (
     <HoSoScreen
-      d={toHoSoView(data, { owners })}
+      d={toHoSoView(data, { owners, stageCfgs, routeSource })}
       canEdit={canEdit}
       canPrice={canPrice}
       canBom={canBom}

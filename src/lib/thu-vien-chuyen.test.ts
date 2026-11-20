@@ -12,9 +12,11 @@ describe('chuyển thư viện SP cũ → mới', () => {
     expect(chuyenThuVienCu(`/products/${ID}/tai-lieu`, '')).toBe(
       `/thu-vien/${ID}?tab=tai-lieu`,
     )
-    // Thông số nằm ngay đầu hồ sơ mới, lộ trình chưa có tab → tab mặc định.
+    // Thông số nằm ngay đầu hồ sơ mới → tab mặc định; lộ trình có tab riêng (B5).
     expect(chuyenThuVienCu(`/products/${ID}/thong-so`, '')).toBe(`/thu-vien/${ID}`)
-    expect(chuyenThuVienCu(`/products/${ID}/lo-trinh`, '')).toBe(`/thu-vien/${ID}`)
+    expect(chuyenThuVienCu(`/products/${ID}/lo-trinh`, '')).toBe(
+      `/thu-vien/${ID}?tab=lo-trinh`,
+    )
   })
 
   it('danh sách: khách + mẫu showroom đổi sang tham số mới', () => {

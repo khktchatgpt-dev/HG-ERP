@@ -21,7 +21,7 @@ const TAB: Record<string, string | null> = {
   'tai-lieu': 'tai-lieu',
   'lich-su': 'lich-su',
   'thong-so': null,
-  'lo-trinh': null,
+  'lo-trinh': 'lo-trinh',
 }
 
 export const HO_SO_TABS = [
@@ -29,6 +29,7 @@ export const HO_SO_TABS = [
   'dong-goi',
   'thanh-phan',
   'tai-lieu',
+  'lo-trinh',
   'lich-su',
 ] as const
 export type HoSoTab = (typeof HO_SO_TABS)[number]

@@ -17,6 +17,7 @@ import {
   Lock,
   Package,
   PenLine,
+  Route,
   Table2,
   Trash2,
 } from 'lucide-react'
@@ -35,6 +36,7 @@ import { HoSoThanhPhan } from './ho-so-thanh-phan'
 import { HoSoPhieu } from './ho-so-phieu'
 import { dmyShort, nz, type HoSoView } from './ho-so.shared'
 import { useHoSo } from './useHoSo'
+import { LoTrinhScreen } from './lo-trinh/LoTrinhScreen'
 import type { HoSoTab } from '@/lib/thu-vien-chuyen'
 import { ShowroomTicks } from '@/components/technical/ShowroomTicks'
 
@@ -159,6 +161,18 @@ export function HoSoScreen({
       dot: thieu.includes('bv') || thieu.includes('anh'),
       sec: 'sec-tl',
     },
+    ...(d.parts.length
+      ? [
+          {
+            id: 'lo-trinh' as Tab,
+            label: 'Lộ trình',
+            icon: <Route aria-hidden />,
+            n: `${d.clusters.length} cụm`,
+            dot: false,
+            sec: 'sec-ls',
+          },
+        ]
+      : []),
     {
       id: 'lich-su',
       label: 'Lịch sử',
@@ -397,14 +411,6 @@ export function HoSoScreen({
             — thông số và đóng gói lưu khi rời ô; định mức gõ như Excel rồi bấm Lưu
             (Ctrl+S).
           </span>
-          {canEdit && (
-            <Link
-              href={`/products/${d.id}?cu=1`}
-              title="Trang hồ sơ cũ — chỉ còn để đổi / xoá ảnh và xem lộ trình, sắp bỏ"
-            >
-              Trang cũ (ảnh, lộ trình)
-            </Link>
-          )}
           <span className="r">
             <button type="button" className="btn" onClick={() => void thoatSua()}>
               <Check size={14} aria-hidden />
@@ -479,6 +485,30 @@ export function HoSoScreen({
         {tab === 'dong-goi' && <HoSoDongGoi d={d} c={c} />}
         {tab === 'thanh-phan' && <HoSoThanhPhan d={d} />}
         {tab === 'tai-lieu' && <HoSoTaiLieu d={d} c={c} canEdit={canEdit} />}
+        {tab === 'lo-trinh' && (
+          // Chỉ đọc (04/11/2026): lộ trình cụm khai trên lệnh, hồ sơ nhận theo.
+          <LoTrinhScreen
+            productId={d.id}
+            productCode={d.code}
+            productName={d.name}
+            bomRev={d.bom_rev}
+            locked={!!d.locked_at}
+            clusters={d.clusters}
+            parts={d.partsRaw.map((p) => ({
+              id: p.id,
+              part_name: p.part_name,
+              group_code: p.group_code,
+              cluster_id: p.cluster_id,
+              qty: p.qty,
+              stages: p.stages ?? null,
+            }))}
+            groupLabels={Object.fromEntries(d.groupsFull.map((g) => [g.code, g.label]))}
+            stages={d.stageCfgs}
+            canEdit={false}
+            chiDoc="Lộ trình cụm được khai trên lệnh đang chạy (Sản xuất › Lộ trình công đoạn), hồ sơ SP tự cập nhật theo."
+            routeSource={d.routeSource}
+          />
+        )}
         {tab === 'lich-su' && <HoSoLichSu d={d} />}
       </section>
     </div>

@@ -68,6 +68,8 @@ export type HoSoData = {
   imageUrl: string | null
   /** Mọi ảnh gắn SP (doc_type image), ảnh đại diện đứng đầu. */
   imageUrls: string[]
+  /** Id file của từng ảnh, cùng thứ tự `imageUrls` (đại diện đứng đầu) — đặt đại diện / xoá. */
+  imageIds: string[]
   parts: ProductPart[]
   groups: PartGroupRow[]
   clusters: ProductCluster[]
@@ -178,6 +180,7 @@ export const profileService = {
       ownerName: product.owner_id ? (names.get(product.owner_id) ?? null) : null,
       imageUrl: product.image_file_id ? fileImageSrc(product.image_file_id) : null,
       imageUrls: imageIds.map(fileImageSrc),
+      imageIds,
       parts,
       groups,
       clusters,
