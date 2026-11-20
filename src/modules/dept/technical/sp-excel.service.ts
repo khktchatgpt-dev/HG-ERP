@@ -187,6 +187,7 @@ export const spExcelService = {
               lenh: q.lenh === '1',
               mau: q.mau === '1',
               the: q.the === '1',
+              khu: q.khu ?? '',
               gia: false,
               page,
               page_size: 500,

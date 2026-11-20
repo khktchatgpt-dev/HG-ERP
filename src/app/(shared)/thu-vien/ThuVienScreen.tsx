@@ -8,11 +8,13 @@ import { TopProgressBar } from '@/components/erp/Spinner'
 import { Modal } from '@/components/Modal'
 import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 import { HO_SO_O, HO_SO_TEN } from '@/lib/ho-so-sp'
+import { SHOWROOM_ZONES } from '@/lib/showroom'
 import { CloneForm } from '../products/_components/CloneForm'
 import { ImagePreviewModal } from '../products/_components/ImagePreviewModal'
 import { BangThuVien } from './thu-vien-bang'
 import { LuoiThuVien } from './thu-vien-luoi'
 import { TaoSp } from './tao-sp'
+import { DanhSachDt, DauTrangDt } from './thu-vien-dt'
 import {
   PAGE_SIZE,
   type LibraryCounts,
@@ -94,7 +96,20 @@ export function ThuVienScreen({
   return (
     <>
       <TopProgressBar active={d.busy || d.dangChay || xe.busy} />
-      <header className="head">
+      {/* Khổ điện thoại (< 640px): đầu trang gọn + tấm lọc — `thu-vien-dt.tsx`. */}
+      <DauTrangDt
+        d={d}
+        filters={filters}
+        counts={counts}
+        total={total}
+        customers={customers}
+        canEdit={canEdit}
+        canPrice={canPrice}
+        exportUrl={EXPORT_URL}
+        xuat={(href) => void xe.xuat(href)}
+        xuatBusy={xe.busy}
+      />
+      <header className="head w-only">
         <div className="head-l">
           <span className="eyebrow">Dùng chung</span>
           <h1>Thư viện sản phẩm</h1>
@@ -157,6 +172,21 @@ export function ThuVienScreen({
             <Tag size={14} aria-hidden />
             <span className="t">In thẻ treo</span>
           </Link>
+          {!canEdit && (
+            // Người chỉ xem (mọi phòng từ 20/11/2026) vẫn xuất được — Kinh doanh cần
+            // file SP gửi khách. Nhập / mẫu trống thì chỉ người sửa được.
+            <button
+              type="button"
+              className="btn"
+              title="Xuất các SP đang lọc ra Excel (kèm ảnh)"
+              aria-busy={xe.busy}
+              aria-disabled={xe.busy}
+              onClick={() => void xe.xuat(`${EXPORT_URL}?${locQuery(filters)}`)}
+            >
+              <FileSpreadsheet size={14} aria-hidden />
+              <span className="t">{xe.busy ? 'Đang tạo file…' : 'Xuất Excel'}</span>
+            </button>
+          )}
           {canEdit && (
             <>
               <details className="dd">
@@ -218,7 +248,7 @@ export function ThuVienScreen({
         </div>
       )}
 
-      <div className="filters">
+      <div className="filters w-only">
         <label htmlFor="tv-q" className="sr">
           Tìm sản phẩm
         </label>
@@ -311,6 +341,22 @@ export function ThuVienScreen({
           <option value="active">Đang dùng</option>
           <option value="inactive">Ngừng dùng ({counts.ngung})</option>
           <option value="all">Tất cả</option>
+        </select>
+        <label htmlFor="tv-khu" className="sr">
+          Khu showroom
+        </label>
+        <select
+          id="tv-khu"
+          className="pick"
+          value={filters.khu}
+          onChange={(e) => d.doiLoc({ khu: e.target.value })}
+        >
+          <option value="">Mọi khu showroom</option>
+          {SHOWROOM_ZONES.map((z) => (
+            <option key={z} value={z}>
+              Khu {z}
+            </option>
+          ))}
         </select>
         <button
           type="button"
@@ -424,14 +470,19 @@ export function ThuVienScreen({
       ) : d.xem === 'luoi' ? (
         <LuoiThuVien d={d} rows={rows} />
       ) : (
-        <BangThuVien
-          d={d}
-          rows={rows}
-          total={total}
-          page={page}
-          filters={filters}
-          canPrice={canPrice}
-        />
+        <>
+          <DanhSachDt rows={rows} canPrice={canPrice} />
+          <div className="w-only" style={{ display: 'contents' }}>
+            <BangThuVien
+              d={d}
+              rows={rows}
+              total={total}
+              page={page}
+              filters={filters}
+              canPrice={canPrice}
+            />
+          </div>
+        </>
       )}
 
       <div className="foot">
@@ -460,7 +511,7 @@ export function ThuVienScreen({
               ? 'Khung nhìn: đang lọc'
               : 'Khung nhìn: SP đang dùng'}
         </span>
-        <span>
+        <span className="w-only">
           Số trên dữ kiện đếm trong tập khách / loại / khung đang chọn, không tính từ khoá
         </span>
         <span className="num" style={{ marginLeft: 'auto' }}>

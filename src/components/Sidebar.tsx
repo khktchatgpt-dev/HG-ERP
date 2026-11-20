@@ -71,7 +71,7 @@ const DEPT_NAV: Record<string, Item[]> = {
   ],
   'Kỹ Thuật': [
     {
-      href: '/products',
+      href: '/thu-vien',
       label: 'Thư viện SP',
       icon: '◇',
       visible: () => true,

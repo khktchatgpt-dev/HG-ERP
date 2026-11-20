@@ -41,6 +41,8 @@ export type LibraryFilters = {
   mau: boolean
   /** Có mẫu nhưng CHƯA treo thẻ (0303, phiếu 101026). */
   the?: boolean
+  /** Khu showroom (0304) — '' / thiếu = mọi khu. */
+  khu?: string
   /** Chưa có giá kế hoạch — chỉ có nghĩa khi người xem được thấy giá. */
   gia: boolean
   page: number
@@ -96,6 +98,8 @@ export type LibraryRow = {
   /** Mẫu showroom (0303) — hai ô tick ở cột "Mẫu" của bảng. */
   showroom_sample: boolean
   showroom_tagged_at: string | null
+  /** Khu showroom (0304) — bày trên hàng khổ điện thoại. */
+  showroom_zone: string | null
   bom_status: 'none' | 'drawing' | 'done'
   parts: number
   check: HoSoCheck
@@ -176,6 +180,7 @@ function matchSets(f: Flag, o: LibraryFilters): boolean {
   if (o.lenh && f.lsx_open === 0) return false
   if (o.mau && !f.has_sample) return false
   if (o.the && !(f.showroom_sample && !f.showroom_tagged_at)) return false
+  if (o.khu && f.showroom_zone !== o.khu) return false
   if (o.gia && f.plan_price != null) return false
   return true
 }
@@ -205,6 +210,7 @@ function toRow(
     locked_at: p.locked_at,
     showroom_sample: p.showroom_sample,
     showroom_tagged_at: p.showroom_tagged_at,
+    showroom_zone: f?.showroom_zone ?? null,
     bom_status: p.bom_status,
     parts: f?.parts ?? 0,
     // Cờ đọc trước trang; SP vừa tạo giữa hai nhịp thì chấm như SP mới tinh.
@@ -272,7 +278,8 @@ export const libraryService = {
     }
 
     // ── lấy trang: lọc TẬP (thiếu/kt/lệnh/mẫu/giá) tính ở app → đưa id xuống DB ──
-    const setFilterOn = !!o.thieu || o.kt || o.lenh || o.mau || o.the || o.gia
+    const setFilterOn =
+      !!o.thieu || o.kt || o.lenh || o.mau || o.the || !!o.khu || o.gia
     const ids = setFilterOn
       ? base.filter((f) => matchSets(f, o)).map((f) => f.id)
       : undefined

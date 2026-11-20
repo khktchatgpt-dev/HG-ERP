@@ -34,6 +34,8 @@ export type ThuVienFilters = {
   mau: boolean
   /** Có mẫu chưa treo thẻ (0303). */
   the: boolean
+  /** Khu showroom (0304), '' = mọi khu. */
+  khu: string
   gia: boolean
 }
 

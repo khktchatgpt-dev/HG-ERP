@@ -45,6 +45,8 @@ export const spExcelExportQuerySchema = z.object({
   mau: z.string().optional(),
   /** Có mẫu chưa treo thẻ (0303) — chip của /thu-vien. */
   the: z.string().optional(),
+  /** Khu showroom (0304). */
+  khu: z.string().max(4).optional(),
   /**
    * Mẫu showroom (0303) — nút Xuất ở `/products`: `co` = có mẫu, `chua_the` =
    * có mẫu chưa treo thẻ.

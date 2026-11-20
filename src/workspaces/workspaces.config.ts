@@ -240,7 +240,7 @@ export const VIEC_SECTION: NavSection = {
  * vào cuối sidebar như PERSONAL_SECTION). Đặt ở đây để workspace mới có ngay,
  * khỏi phải nhớ copy vào từng config.
  *
- * `/products` (hồ sơ + thư viện SP) mở cho mọi phòng xem — chỉ Kỹ thuật / Bán
+ * `/thu-vien` (hồ sơ + thư viện SP) mở cho mọi phòng xem — chỉ Kỹ thuật / Bán
  * hàng / Giám đốc sửa được (xem `src/app/(shared)` và rbac `actions.ts`).
  */
 export const SHARED_SECTION: NavSection = {
@@ -249,12 +249,13 @@ export const SHARED_SECTION: NavSection = {
   items: [
     // "Phân công việc" KHÔNG còn ở đây (05/11/2026, B2): nó là nhóm VIỆC đứng đầu
     // mọi sidebar (`VIEC_SECTION`) — một đích một dòng.
-    { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
+    // Thư viện SP MỚI cho mọi phòng (20/11/2026) — thay `/products` cũ. `exact`
+    // để không sáng đôi với "Lệnh SX · hồ sơ SP" (/thu-vien/lenh) của Kỹ thuật.
+    { href: '/thu-vien', label: 'Thư viện sản phẩm', icon: 'armchair', exact: true },
     // Góp ý hệ thống (0253) — mọi người viết / xem được, nên ở khu dùng chung.
     { href: '/gop-y', label: 'Góp ý hệ thống', icon: 'messages-square' },
-    // "Thư viện SP (mới)" + "Lệnh SX · hồ sơ SP" (/thu-vien) KHÔNG ở đây nữa —
-    // chủ dự án chốt 13/10/2026: đó là phần riêng của Kỹ thuật. Xem nav
-    // workspace `technical` + cửa chặn ở `(shared)/thu-vien/layout.tsx`.
+    // "Lệnh SX · hồ sơ SP" (/thu-vien/lenh) là phần riêng của Kỹ thuật — ở nav
+    // workspace `technical`, page tự gác.
     // Khuôn nhôm: Kỹ thuật giữ, nhưng Cung ứng tra để đặt hàng và Sản xuất tra
     // để nhận dạng cây nhôm — nên nó ở khu dùng chung, không nhốt trong /technical.
     { href: '/khuon', label: 'Khuôn nhôm', icon: 'shapes' },
@@ -533,12 +534,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kỹ thuật',
         items: [
           { href: '/technical', label: 'Trang chủ', icon: 'home' },
-          // "Thư viện sản phẩm" đã chuyển sang SHARED_SECTION (/products) —
-          // mọi workspace đều có, nên bỏ ở đây để khỏi hiện hai lần.
-          // Hai màn RIÊNG của Kỹ thuật (13/10/2026 — trước nằm ở Dùng chung):
-          // thư viện SP mới (khuôn C, checklist hồ sơ 6 ô, 08/10) và lệnh đang
-          // chạy thiếu hồ sơ SP (09/10). URL giữ /thu-vien; cửa chặn ở layout.
-          { href: '/thu-vien', label: 'Thư viện SP (mới)', icon: 'armchair' },
+          // "Thư viện sản phẩm" (/thu-vien) ở SHARED_SECTION — mọi workspace đều
+          // có (20/11/2026). Còn lại màn RIÊNG: lệnh đang chạy thiếu hồ sơ SP.
           { href: '/thu-vien/lenh', label: 'Lệnh SX · hồ sơ SP', icon: 'clipboard-list' },
           { href: '/technical/showroom', label: 'Mẫu showroom', icon: 'store' },
           { href: '/technical/load-cont', label: 'Tính load cont', icon: 'container' },

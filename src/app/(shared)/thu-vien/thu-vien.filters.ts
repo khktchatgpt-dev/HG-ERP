@@ -1,4 +1,5 @@
 import { PRODUCT_TYPE_CODES, FRAME_MATERIALS } from '@/lib/product-code'
+import { isShowroomZone } from '@/lib/showroom'
 import { isThieuFilter } from '@/lib/ho-so-sp'
 import type { ThuVienFilters } from './thu-vien.shared'
 
@@ -28,6 +29,7 @@ export function docLocThuVien(sp: ThuVienSearch, canPrice: boolean): ThuVienFilt
     lenh: thamSo(sp.lenh) === '1',
     mau: thamSo(sp.mau) === '1',
     the: thamSo(sp.the) === '1',
+    khu: isShowroomZone(thamSo(sp.khu)) ? thamSo(sp.khu) : '',
     gia: canPrice && thamSo(sp.gia) === '1',
   }
 }
@@ -45,5 +47,6 @@ export function locQuery(f: ThuVienFilters): string {
   if (f.lenh) p.set('lenh', '1')
   if (f.mau) p.set('mau', '1')
   if (f.the) p.set('the', '1')
+  if (f.khu) p.set('khu', f.khu)
   return p.toString()
 }

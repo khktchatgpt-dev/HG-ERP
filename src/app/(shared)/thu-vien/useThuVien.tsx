@@ -59,6 +59,7 @@ export function useThuVien({
     filters.lenh ||
     filters.mau ||
     filters.the ||
+    !!filters.khu ||
     filters.gia ||
     filters.tt !== 'active'
   const boLoc = () =>
@@ -72,6 +73,7 @@ export function useThuVien({
       lenh: '',
       mau: '',
       the: '',
+      khu: '',
       gia: '',
       tt: '',
       trang: '1',

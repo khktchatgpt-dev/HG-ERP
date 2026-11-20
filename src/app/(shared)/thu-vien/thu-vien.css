@@ -2798,3 +2798,403 @@
 .tv .hs .panel .pad {
   padding: 10px 14px;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   KHỔ ĐIỆN THOẠI (20/11/2026, bản vẽ 1csrtDXWHg55jb2c3CW51i) — `.tv` hẹp
+   dưới 640px: ẩn đầu trang / hàng lọc / bảng máy tính (`.w-only`), hiện đầu
+   trang gọn + danh sách hàng 3 dòng (`.dt-only`, `thu-vien-dt.tsx`). Nút và
+   hàng cao ≥ 36px cho ngón tay; phẳng, góc vuông như phần còn lại của khu.
+   ══════════════════════════════════════════════════════════════════════ */
+.tv .dt-only {
+  display: none;
+}
+@container (max-width: 639px) {
+  .tv .w-only {
+    display: none !important;
+  }
+  .tv .dt-only {
+    display: block;
+  }
+  .tv .gridv {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tv .foot {
+    gap: 8px;
+  }
+  .tv .foot .btn {
+    height: 36px;
+  }
+}
+.tv .dt-dau {
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  border-bottom: 1px solid var(--line);
+}
+.tv .dt-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.tv .dt-hd h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tv .dt-hd h1 small {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink3);
+  margin-left: 4px;
+}
+.tv .dt-dau .btn {
+  height: 36px;
+  min-width: 36px;
+  justify-content: center;
+  border-radius: 2px;
+}
+.tv .dt-dau details.dd .dd-m {
+  top: 40px;
+  min-width: 240px;
+}
+.tv .dt-menu .g {
+  font-size: 11px;
+  color: var(--ink3);
+  padding: 8px 12px 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tv details.dd .dt-menu a,
+.tv .dt-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.tv .dt-menu button small {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink3);
+}
+.tv .dt-srch {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+.tv .dt-srch .in {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  color: var(--ink3);
+}
+.tv .dt-srch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-size: 16px; /* < 16px thì iOS tự phóng to trang khi chạm ô */
+  color: var(--ink);
+  background: transparent;
+}
+.tv .dt-srch .in:focus-within {
+  border-color: var(--act);
+}
+.tv .dt-srch .btn.on {
+  border-color: var(--act);
+  color: var(--act-text);
+}
+.tv .dt-srch .btn b {
+  font-family: var(--mono);
+}
+.tv .dt-tabs {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-top: 1px solid var(--hair);
+}
+.tv .dt-tabs button {
+  flex: none;
+  padding: 9px 10px 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink2);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tv .dt-tabs button b {
+  font-family: var(--mono);
+  margin-left: 4px;
+}
+.tv .dt-tabs button.on {
+  color: var(--act-text);
+  border-bottom-color: var(--act);
+  font-weight: 600;
+}
+.tv .dt-act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--act-wash);
+  color: var(--act-text);
+  border-top: 1px solid var(--hair);
+}
+.tv .dt-act span {
+  flex: 1;
+  min-width: 0;
+}
+.tv .dt-act button {
+  flex: none;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  padding: 6px 0;
+  cursor: pointer;
+}
+/* ── danh sách hàng 3 dòng ── */
+.tv .dt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--card);
+}
+.tv .dt-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hair);
+  color: var(--ink);
+  text-decoration: none;
+}
+.tv .dt-row:active {
+  background: var(--hover);
+}
+.tv .dt-row .th {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  background: var(--raised);
+  border: 1px solid var(--hair);
+}
+.tv .dt-row .th.none {
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  border-color: var(--line);
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--ink3);
+  text-align: center;
+}
+.tv .dt-row .bd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tv .dt-row .l1 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tv .dt-row .code {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.tv .dt-row .tg {
+  font-size: 11px;
+  color: var(--ink3);
+  border: 1px solid var(--line);
+  padding: 0 4px;
+}
+.tv .dt-row .zone {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  border: 1px solid var(--line);
+  padding: 0 4px;
+  color: var(--ink2);
+}
+.tv .dt-row .nm {
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tv .dt-row .l3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 12px;
+  color: var(--ink3);
+}
+.tv .dt-row .l3 .m {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink2);
+}
+.tv .dt-row .l3 .w {
+  color: var(--warn);
+}
+.tv .dt-row .flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.tv .dt-row .f {
+  font-size: 11px;
+  line-height: 17px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  color: var(--ink2);
+}
+.tv .dt-row .f.miss {
+  color: var(--warn);
+  background: var(--warn-wash);
+  border-color: var(--warn-line);
+}
+.tv .dt-row .f.ok {
+  color: var(--done);
+  background: var(--done-wash);
+  border-color: var(--done-line);
+}
+/* ── tấm lọc trượt từ đáy ── */
+.tv .dt-sheet-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.tv .dt-sheet-wrap .dim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 20, 30, 0.45);
+}
+.tv .dt-sheet {
+  position: relative;
+  max-height: 86%;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+}
+.tv .dt-sheet .sh-h {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--hair);
+}
+.tv .dt-sheet .sh-h button {
+  margin-left: auto;
+  font: inherit;
+  font-weight: 400;
+  color: var(--act-text);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  padding: 6px 0;
+  cursor: pointer;
+}
+.tv .dt-sheet .sh-b {
+  overflow-y: auto;
+}
+.tv .dt-sheet .fld {
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  min-width: 0;
+}
+.tv .dt-sheet .fld label,
+.tv .dt-sheet .fld legend {
+  display: block;
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--ink3);
+}
+.tv .dt-sheet select {
+  width: 100%;
+  height: 40px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0;
+}
+.tv .dt-sheet select.on {
+  border-color: var(--act);
+  color: var(--act-text);
+  font-weight: 600;
+}
+.tv .dt-sheet .seg {
+  display: flex;
+  border: 1px solid var(--line);
+}
+.tv .dt-sheet .seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 2px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--card);
+  border: 0;
+  border-right: 1px solid var(--line);
+  cursor: pointer;
+}
+.tv .dt-sheet .seg button:last-child {
+  border-right: 0;
+}
+.tv .dt-sheet .seg button.on {
+  background: var(--act-wash);
+  color: var(--act-text);
+  font-weight: 600;
+}
+.tv .dt-sheet .sh-f {
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+}
+.tv .dt-sheet .sh-f .btn {
+  width: 100%;
+  height: 44px;
+  justify-content: center;
+  border-radius: 2px;
+}
