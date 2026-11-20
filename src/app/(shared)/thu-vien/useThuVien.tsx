@@ -10,6 +10,38 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import type { Product } from '@/modules/dept/technical/technical.repo'
 import { XEM_KEY, type LibraryRow, type ThuVienFilters } from './thu-vien.shared'
 
+/**
+ * GIỮ BỘ LỌC (20/11/2026, chủ dự án: "giữ phiên filter để tránh load lại làm mất
+ * filter"): mỗi lần URL đổi thì ghi query vào localStorage; vào lại /thu-vien
+ * TRẦN (bấm menu, nút quay về từ hồ sơ) thì khôi phục. "Bỏ lọc" làm URL trần nên
+ * xoá luôn bản đã nhớ. Không ghi tham số mở hộp thoại (nhân bản / BOM).
+ */
+const LOC_KEY = 'tv-loc-v1'
+const KHONG_NHO = ['clone', 'openbom']
+function queryNho(params: URLSearchParams): string {
+  const p = new URLSearchParams(params.toString())
+  for (const k of KHONG_NHO) p.delete(k)
+  // tt=active là mặc định — một mình nó không phải "đang lọc".
+  if (p.get('tt') === 'active') p.delete('tt')
+  if (p.get('trang') === '1') p.delete('trang')
+  return p.toString()
+}
+function docNho(): string {
+  try {
+    return localStorage.getItem(LOC_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+function ghiNho(qs: string) {
+  try {
+    if (qs) localStorage.setItem(LOC_KEY, qs)
+    else localStorage.removeItem(LOC_KEY)
+  } catch {
+    /* trình duyệt chặn bộ nhớ — bỏ qua, màn vẫn chạy */
+  }
+}
+
 /** Toàn bộ state + xử lý của màn Thư viện sản phẩm. Các khối nhận `d` và chỉ gọi hàm. */
 export function useThuVien({
   filters,
@@ -26,6 +58,16 @@ export function useThuVien({
   const [dangChay, batDau] = useTransition()
   const [busy, setBusy] = useState(false)
 
+  // Màn có thể dựng lại sau mỗi lần đổi URL, nên KHÔNG dựa cờ trong component:
+  // doiLoc ghi bản nhớ TRƯỚC khi đổi URL (kể cả khi về trần), nên URL trần mà bộ
+  // nhớ còn query chỉ xảy ra khi người dùng vào từ ngoài (menu, quay về từ hồ sơ).
+  useEffect(() => {
+    const qs = queryNho(new URLSearchParams(params.toString()))
+    const nho = docNho()
+    if (!qs && nho) router.replace(`${pathname}?${nho}`, { scroll: false })
+    else ghiNho(qs)
+  }, [params, pathname, router])
+
   /*
     Ô tìm gõ ở client, truy vấn ở server (cột `search_text` + nhánh gần đúng).
     Bản nháp cục bộ + 350ms ngừng gõ — cùng hook với màn Vật tư.
@@ -41,13 +83,13 @@ export function useThuVien({
     // Đổi lọc là về trang 1, trừ khi chính nút lật trang gọi.
     if (!('trang' in patch)) p.delete('trang')
     const qs = p.toString()
+    ghiNho(queryNho(p))
     batDau(() => router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false }))
   }
 
   /** Chip/ô bật-tắt: bấm lại giá trị đang bật thì bỏ. */
   const lat = (k: 'thieu', v: string) => doiLoc({ [k]: filters[k] === v ? '' : v })
-  const latCo = (k: 'kt' | 'lenh' | 'gia') =>
-    doiLoc({ [k]: filters[k] ? '' : '1' })
+  const latCo = (k: 'kt' | 'lenh' | 'gia') => doiLoc({ [k]: filters[k] ? '' : '1' })
 
   const dangLoc =
     !!filters.q ||
@@ -217,8 +259,8 @@ export function useThuVien({
       group?: string
     }[] = [
       { label: 'Mở hồ sơ', onClick: () => router.push(`/thu-vien/${r.id}`) },
-      { label: 'Định mức', onClick: () => router.push(`/products/${r.id}/dinh-muc`) },
-      { label: 'Đóng gói', onClick: () => router.push(`/products/${r.id}/dong-goi`) },
+      { label: 'Định mức', onClick: () => router.push(`/thu-vien/${r.id}?tab=dinh-muc`) },
+      { label: 'Đóng gói', onClick: () => router.push(`/thu-vien/${r.id}?tab=dong-goi`) },
     ]
     if (canEdit) {
       items.push(

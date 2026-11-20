@@ -513,7 +513,7 @@ export function ThuVienScreen({
         <LuoiThuVien d={d} rows={rows} />
       ) : (
         <>
-          <DanhSachDt rows={rows} canPrice={canPrice} />
+          <DanhSachDt rows={rows} canPrice={canPrice} canEdit={canEdit} />
           <div className="w-only" style={{ display: 'contents' }}>
             <BangThuVien
               d={d}

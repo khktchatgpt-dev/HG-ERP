@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Menu } from '@/components/kit'
+import { ShowroomTicks } from '@/components/technical/ShowroomTicks'
 import { fmtKg, fmtKt, OHoSo, type LibraryRow } from './thu-vien.shared'
 import type { ThuVienCtx } from './useThuVien'
 
@@ -86,6 +87,15 @@ export function LuoiThuVien({ d, rows }: { d: ThuVienCtx; rows: LibraryRow[] }) 
                     : `thiếu KTSP${nw ? '' : ' · thiếu NW'}`}
               </div>
               <OHoSo check={r.check} wide />
+              {/* Mẫu · thẻ · khu sửa ngay trên thẻ (20/11/2026) — rà showroom không cần mở hồ sơ. */}
+              <ShowroomTicks
+                productId={r.id}
+                coMau={r.showroom_sample}
+                taggedAt={r.showroom_tagged_at}
+                khu={r.showroom_zone}
+                canEdit={d.canEdit}
+                compact
+              />
             </div>
           )
         })}

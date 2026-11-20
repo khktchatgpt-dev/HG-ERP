@@ -267,7 +267,7 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
         r.saved_image && 'đã lấy ảnh SP',
       ].filter(Boolean)
       toast.success(`Đã tạo ${r.code}`, `Kèm ${extras.join(' · ')}`)
-      router.push(`/products/${r.product_id}/dinh-muc`)
+      router.push(`/thu-vien/${r.product_id}?tab=dinh-muc`)
       onClose()
     } catch (e) {
       setBusy(null)
@@ -430,7 +430,7 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <a
-                    href={`/products/${draft.meta.existingProduct.id}/dinh-muc`}
+                    href={`/thu-vien/${draft.meta.existingProduct.id}?tab=dinh-muc`}
                     className="font-medium text-[var(--primary)] hover:underline"
                   >
                     Mở hồ sơ {draft.meta.existingProduct.code} →

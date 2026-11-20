@@ -16,6 +16,7 @@ import {
   type ThuVienFilters,
 } from './thu-vien.shared'
 import type { ThuVienCtx } from './useThuVien'
+import { ShowroomTicks } from '@/components/technical/ShowroomTicks'
 
 /**
  * THƯ VIỆN SP — KHỔ ĐIỆN THOẠI (< 640px bề rộng `.tv`), dựng theo bản vẽ
@@ -474,9 +475,12 @@ function oThieu(r: LibraryRow): string[] {
 export function DanhSachDt({
   rows,
   canPrice,
+  canEdit,
 }: {
   rows: LibraryRow[]
   canPrice: boolean
+  /** Người sửa SP: dải Mẫu · Thẻ · Khu dưới mỗi hàng sửa được ngay (20/11/2026). */
+  canEdit: boolean
 }) {
   return (
     <ul className="dt-only dt-list">
@@ -499,7 +503,8 @@ export function DanhSachDt({
                   <b className="code">{r.code}</b>
                   {r.is_set && <span className="tg">Bộ</span>}
                   {!r.is_active && <span className="tg">Ngừng</span>}
-                  {r.showroom_zone && (
+                  {/* Người sửa thấy khu ở ô chọn dưới hàng — không lặp nhãn. */}
+                  {!canEdit && r.showroom_zone && (
                     <span className="zone" title="Khu showroom">
                       {r.showroom_zone}
                     </span>
@@ -527,6 +532,20 @@ export function DanhSachDt({
                 )}
               </span>
             </Link>
+            {/* Ngoài Link: ô tick / ô chọn không được lồng trong thẻ <a>. Chủ dự án
+                20/11/2026: "cho phép thao tác bên ngoài, vào bên trong tăng thao tác". */}
+            {canEdit && (
+              <div className="dt-sr">
+                <ShowroomTicks
+                  productId={r.id}
+                  coMau={r.showroom_sample}
+                  taggedAt={r.showroom_tagged_at}
+                  khu={r.showroom_zone}
+                  canEdit
+                  compact
+                />
+              </div>
+            )}
           </li>
         )
       })}

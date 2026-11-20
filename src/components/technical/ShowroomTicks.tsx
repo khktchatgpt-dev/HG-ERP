@@ -141,7 +141,7 @@ export function ShowroomTicks({
         </label>
         {khu !== undefined && (
           <label className="inline-flex items-center gap-1.5" title={noQuyen}>
-            <span>Khu</span>
+            {!bare && <span>Khu</span>}
             <select
               className="h-7 border border-[var(--line,#c9d0db)] bg-transparent px-1"
               value={khuNow ?? ''}

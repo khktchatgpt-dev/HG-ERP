@@ -3340,3 +3340,29 @@
   color: var(--act-text);
   font-weight: 600;
 }
+
+/* Dải Mẫu · Thẻ · Khu dưới hàng khổ điện thoại (20/11/2026) — thụt bằng cột ảnh,
+   vùng bấm cao 36px cho ngón tay. */
+.tv .dt-list li {
+  border-bottom: 1px solid var(--hair);
+}
+.tv .dt-list li .dt-row {
+  border-bottom: 0;
+}
+.tv .dt-sr {
+  padding: 0 12px 8px 86px;
+  font-size: 13px;
+}
+.tv .dt-sr label {
+  min-height: 36px;
+  padding-right: 6px;
+}
+.tv .dt-sr input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+}
+.tv .dt-sr select {
+  height: 36px;
+  min-width: 64px;
+  font-size: 16px;
+}

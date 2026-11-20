@@ -35,9 +35,10 @@ import { HoSoThanhPhan } from './ho-so-thanh-phan'
 import { HoSoPhieu } from './ho-so-phieu'
 import { dmyShort, nz, type HoSoView } from './ho-so.shared'
 import { useHoSo } from './useHoSo'
+import type { HoSoTab } from '@/lib/thu-vien-chuyen'
 import { ShowroomTicks } from '@/components/technical/ShowroomTicks'
 
-type Tab = 'dinh-muc' | 'dong-goi' | 'thanh-phan' | 'tai-lieu' | 'lich-su'
+type Tab = HoSoTab
 
 /**
  * HỒ SƠ SẢN PHẨM — bản THẺ 09/10/2026, dựng theo bản vẽ đã duyệt
@@ -56,6 +57,7 @@ export function HoSoScreen({
   canLock = false,
   canStatus = false,
   batDauSua = false,
+  tabDau,
 }: {
   d: HoSoView
   canEdit: boolean
@@ -70,13 +72,15 @@ export function HoSoScreen({
   canStatus?: boolean
   /** Mở trang đã ở chế độ sửa (vừa tạo SP mới từ form gọn). */
   batDauSua?: boolean
+  /** Tab mở sẵn (`?tab=`). */
+  tabDau?: HoSoTab
 }) {
   const c = useHoSo({ d, canEdit: canEdit || canBom, batDauSua })
   const confirm = useConfirm()
   const [dirtyBom, setDirtyBom] = useState(0)
   const onDirty = useCallback((n: number) => setDirtyBom(n), [])
   const suaDuocTrang = (canEdit || canBom) && !c.khoa
-  const [tab, setTab] = useState<Tab>('dinh-muc')
+  const [tab, setTab] = useState<Tab>(tabDau ?? 'dinh-muc')
 
   async function xoaSp() {
     const ok = await confirm({
@@ -394,8 +398,11 @@ export function HoSoScreen({
             (Ctrl+S).
           </span>
           {canEdit && (
-            <Link href={`/products/${d.id}`} title="Mở form đầy đủ mọi trường">
-              Form đầy đủ
+            <Link
+              href={`/products/${d.id}?cu=1`}
+              title="Trang hồ sơ cũ — chỉ còn để đổi / xoá ảnh và xem lộ trình, sắp bỏ"
+            >
+              Trang cũ (ảnh, lộ trình)
             </Link>
           )}
           <span className="r">

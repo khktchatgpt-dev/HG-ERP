@@ -11,6 +11,7 @@ import { profileService } from '@/modules/dept/technical/profile.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { HttpError } from '@/server/http'
 import { HoSoScreen } from './HoSoScreen'
+import { isHoSoTab } from '@/lib/thu-vien-chuyen'
 import { toHoSoView } from './ho-so.shared'
 
 /**
@@ -28,7 +29,7 @@ export default async function HoSoSanPhamPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ sua?: string }>
+  searchParams: Promise<{ sua?: string; tab?: string }>
 }) {
   const user = await authService.requirePageUser()
   const [{ id }, sp] = await Promise.all([params, searchParams])
@@ -67,6 +68,8 @@ export default async function HoSoSanPhamPage({
       canStatus={canStatus}
       // Vừa tạo xong (form gọn) → mở thẳng ở chế độ sửa để điền tiếp.
       batDauSua={sp.sua === '1'}
+      // Link cũ /products/<id>/<tab> đổi hướng sang ?tab= (proxy, 20/11/2026).
+      tabDau={isHoSoTab(sp.tab) ? sp.tab : undefined}
     />
   )
 }

@@ -31,9 +31,9 @@ export type CotHien = {
   gia: boolean
 }
 function cotTheoRong(w: number, canPrice: boolean): CotHien {
-  // +64 cho cột Mẫu · Thẻ (0303) — giữ chỗ cho Tên SP như trước khi thêm cột.
-  const lg = w >= 1244
-  const md = w >= 944
+  // +120 cho cột Mẫu · Thẻ · Khu (0303/0304) — giữ chỗ cho Tên SP như trước khi thêm cột.
+  const lg = w >= 1300
+  const md = w >= 1000
   return { loai: lg, kt: md, nwgw: lg, lenh: lg, gia: canPrice && md }
 }
 
@@ -97,8 +97,11 @@ export function BangThuVien({
             )}
             <th style={{ width: 190 }}>Hồ sơ</th>
             <th style={{ width: 124 }}>Định mức</th>
-            <th style={{ width: 64 }} title="Mẫu ở showroom · đã treo thẻ (phiếu 101026) — tick là lưu">
-              Mẫu · Thẻ
+            <th
+              style={{ width: 120 }}
+              title="Mẫu ở showroom · đã treo thẻ · khu showroom — tick / chọn là lưu, không cần mở hồ sơ"
+            >
+              Mẫu · Thẻ · Khu
             </th>
             {cot.lenh && (
               <th
@@ -229,6 +232,7 @@ function DongSp({ d, r, cot }: { d: ThuVienCtx; r: LibraryRow; cot: CotHien }) {
             productId={r.id}
             coMau={r.showroom_sample}
             taggedAt={r.showroom_tagged_at}
+            khu={r.showroom_zone}
             canEdit={d.canEdit}
             bare
           />

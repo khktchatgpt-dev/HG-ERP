@@ -1,6 +1,7 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { verifySessionToken } from '@/modules/core/auth/session'
 import { COOKIE_KHU, khuGhiCookie } from '@/workspaces/khu-dang-dung'
+import { chuyenThuVienCu } from '@/lib/thu-vien-chuyen'
 
 // `/design-lab` (sổ thiết kế public) đã XOÁ 07/10/2026 — không còn đường public nào ngoài đăng nhập.
 const PUBLIC_PATHS = ['/login', '/register', '/api/login', '/api/register', '/api/logout']
@@ -29,7 +30,7 @@ const IMAGE_PATH = /^\/api\/files\/[0-9a-f-]{36}\/img$/i
  * bằng `/api/`.
  */
 const MOVED_PREFIXES: ReadonlyArray<readonly [from: string, to: string]> = [
-  ['/technical/products', '/products'],
+  // '/technical/products' + '/products' cũ → thư viện mới: xem `chuyenThuVienCu`.
   // Hoá đơn NCC không phải việc của Cung ứng — trang bên khu Mua hàng đã bỏ
   // 17/09/2026, ai còn giữ link cũ thì đẩy thẳng sang sổ của Kế toán.
   ['/mua-hang/hoa-don', '/finance/hoa-don-ncc'],
@@ -90,6 +91,10 @@ export async function proxy(request: NextRequest) {
     url.search = rest === 'new' ? '?muc=giao' : rest ? `?viec=${rest}` : ''
     return NextResponse.redirect(url)
   }
+  // Thư viện SP cũ → /thu-vien (20/11/2026): đổi cả tab, tham số lọc; ?cu=1 giữ cũ.
+  const tvMoi = chuyenThuVienCu(pathname, request.nextUrl.search)
+  if (tvMoi) return NextResponse.redirect(new URL(tvMoi, request.url))
+
   for (const [from, to] of MOVED_PREFIXES) {
     if (pathname === from || pathname.startsWith(from + '/')) {
       const url = request.nextUrl.clone()
