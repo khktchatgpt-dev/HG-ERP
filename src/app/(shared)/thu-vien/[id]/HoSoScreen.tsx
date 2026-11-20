@@ -24,9 +24,10 @@ import { TopProgressBar } from '@/components/erp/Spinner'
 import { api, ApiError } from '@/lib/api'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { HO_SO_O, HO_SO_TEN } from '@/lib/ho-so-sp'
-import { LIFECYCLE_LABEL } from '@/lib/product-lifecycle'
 import { KHUNG_LABEL, LOAI_LABEL } from '../thu-vien.shared'
 import { HoSoDinhMuc } from './ho-so-dinh-muc'
+import { CongCuDinhMuc } from './ho-so-cong-cu-dm'
+import { NutKhoa, TrangThaiHoSo } from './ho-so-trang-thai'
 import { HoSoDongGoi } from './ho-so-dong-goi'
 import { HoSoLichSu } from './ho-so-lich-su'
 import { HoSoTaiLieu } from './ho-so-tai-lieu'
@@ -52,6 +53,8 @@ export function HoSoScreen({
   canPrice,
   canBom,
   canRemove = false,
+  canLock = false,
+  canStatus = false,
   batDauSua = false,
 }: {
   d: HoSoView
@@ -61,6 +64,10 @@ export function HoSoScreen({
   canBom: boolean
   /** Quyền `technical.product.remove` — nút Xoá ở đầu trang. */
   canRemove?: boolean
+  /** Quyền `technical.product.lock` — nút Khoá / Mở khoá. */
+  canLock?: boolean
+  /** Quyền `technical.product.lifecycle` — menu đổi trạng thái hồ sơ. */
+  canStatus?: boolean
   /** Mở trang đã ở chế độ sửa (vừa tạo SP mới từ form gọn). */
   batDauSua?: boolean
 }) {
@@ -202,7 +209,6 @@ export function HoSoScreen({
               </span>
               <span className="chip">ĐVT {d.unit}</span>
               {d.rev > 0 && <span className="chip">Bản #{d.rev}</span>}
-              <span className="pill gray">{LIFECYCLE_LABEL[d.lifecycle]}</span>
               {d.locked_at && (
                 <span className="pill ok">Đã khoá {dmyShort(d.locked_at)}</span>
               )}
@@ -215,6 +221,8 @@ export function HoSoScreen({
             </div>
           </div>
           <div className="r">
+            <TrangThaiHoSo d={d} c={c} canStatus={canStatus} />
+            {canLock && <NutKhoa d={d} c={c} />}
             <a
               className="btn"
               href={`/api/dept/technical/products/${d.id}/export`}
@@ -272,7 +280,9 @@ export function HoSoScreen({
                 aria-disabled="true"
                 title={
                   c.khoa
-                    ? 'Hồ sơ đã khoá — mở khoá ở form đầy đủ mới sửa được'
+                    ? canLock
+                      ? 'Hồ sơ đã khoá — bấm Mở khoá để sửa'
+                      : 'Hồ sơ đã khoá — người có quyền khoá hồ sơ mới mở được'
                     : 'Việc này do Kỹ thuật quản lý'
                 }
               >
@@ -454,7 +464,10 @@ export function HoSoScreen({
           ))}
         </nav>
         {tab === 'dinh-muc' && (
-          <HoSoDinhMuc d={d} c={c} canEditBom={canBom} onDirty={onDirty} />
+          <>
+            <CongCuDinhMuc d={d} c={c} canEditBom={canBom} dirty={dirtyBom} />
+            <HoSoDinhMuc d={d} c={c} canEditBom={canBom} onDirty={onDirty} />
+          </>
         )}
         {tab === 'dong-goi' && <HoSoDongGoi d={d} c={c} />}
         {tab === 'thanh-phan' && <HoSoThanhPhan d={d} />}

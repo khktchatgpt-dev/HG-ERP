@@ -3198,3 +3198,145 @@
   justify-content: center;
   border-radius: 2px;
 }
+
+/* ── B2 (20/11/2026): ô chọn + tám ô tech_spec trên khối thông số hồ sơ ── */
+.tv .hs table.xl select.cell {
+  height: 24px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 4px;
+  padding: 0 4px;
+  font: inherit;
+}
+.tv .hs table.xl select.cell:focus {
+  outline: none;
+  border-color: var(--c-ts);
+  box-shadow: 0 0 0 2px var(--w-ts);
+}
+.tv .hs .ts-sua {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.tv .hs .ts-sua > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── B3 (20/11/2026): công cụ định mức + cụm + tổng hợp vật tư trên tab Định mức ── */
+.tv .dm-tools .pend {
+  color: var(--warn);
+  font-size: 12px;
+}
+.tv .dm-cum table.xl {
+  width: auto;
+  min-width: 480px;
+  border-collapse: collapse;
+}
+.tv .dm-cum table.xl th,
+.tv .dm-cum table.xl td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--hair);
+  text-align: left;
+}
+.tv .dm-cum table.xl th {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink2);
+  background: var(--raised);
+}
+.tv .dm-cum .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tv .dm-cum input.cell {
+  height: 24px;
+  border: 1px solid var(--line);
+  padding: 0 6px;
+  font: inherit;
+}
+.tv .dm-rollup > summary {
+  cursor: pointer;
+  padding: 8px 14px;
+  font-weight: 600;
+  background: var(--card);
+  border-bottom: 1px solid var(--hair);
+}
+.tv .dm-rollup[open] > summary {
+  border-bottom-color: var(--line);
+}
+
+/* ── B4 (20/11/2026): trạng thái hồ sơ + khoá ở đầu trang hồ sơ. Nút trung tính,
+   màu vòng đời chỉ ở CHẤM (nền đặc = bấm được, không tô nút bằng màu trạng thái). ── */
+.tv .btn.lc .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink3);
+}
+.tv .btn.lc-review .dot {
+  background: var(--warn);
+}
+.tv .btn.lc-approved .dot {
+  background: var(--act);
+}
+.tv .btn.lc-production .dot {
+  background: var(--done);
+}
+.tv .btn.lc-discontinued .dot {
+  background: var(--stop);
+}
+.tv details.dd .lc-m {
+  min-width: 300px;
+}
+.tv .lc-m .g {
+  font-size: 11px;
+  color: var(--ink3);
+  padding: 8px 12px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tv .lc-m button {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 7px 12px;
+  border: 0;
+  border-top: 1px solid var(--hair);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tv .lc-m button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.tv .lc-m button[aria-current] {
+  background: var(--act-wash);
+  cursor: default;
+}
+.tv .lc-m .i {
+  width: 16px;
+  flex: none;
+  color: var(--ink3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tv .lc-m small {
+  display: block;
+  color: var(--ink3);
+  font-size: 11px;
+}
+
+/* Ô chọn lọc đang BẬT (20/11/2026) — viền + chữ màu hành động, để hàng lọc dài vẫn
+   nhìn ra ngay điều kiện nào đang áp. */
+.tv select.pick.on {
+  border-color: var(--act);
+  color: var(--act-text);
+  font-weight: 600;
+}

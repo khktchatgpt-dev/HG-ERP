@@ -9,6 +9,7 @@ import { Modal } from '@/components/Modal'
 import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 import { HO_SO_O, HO_SO_TEN } from '@/lib/ho-so-sp'
 import { SHOWROOM_ZONES } from '@/lib/showroom'
+import { LIFECYCLES, LIFECYCLE_LABEL } from '@/lib/product-lifecycle'
 import { CloneForm } from '../products/_components/CloneForm'
 import { ImagePreviewModal } from '../products/_components/ImagePreviewModal'
 import { BangThuVien } from './thu-vien-bang'
@@ -89,8 +90,9 @@ export function ThuVienScreen({
     !!filters.thieu ||
     filters.kt ||
     filters.lenh ||
-    filters.mau ||
-    filters.the ||
+    !!filters.mau ||
+    !!filters.the ||
+    !!filters.anh ||
     filters.gia
 
   return (
@@ -118,7 +120,7 @@ export function ThuVienScreen({
             n={counts.total}
             on={!locTap}
             onClick={() =>
-              d.doiLoc({ thieu: '', kt: '', lenh: '', mau: '', the: '', gia: '' })
+              d.doiLoc({ thieu: '', kt: '', lenh: '', mau: '', the: '', anh: '', gia: '' })
             }
           />
           <Fact
@@ -342,6 +344,22 @@ export function ThuVienScreen({
           <option value="inactive">Ngừng dùng ({counts.ngung})</option>
           <option value="all">Tất cả</option>
         </select>
+        <label htmlFor="tv-hs" className="sr">
+          Trạng thái hồ sơ
+        </label>
+        <select
+          id="tv-hs"
+          className="pick"
+          value={filters.hs}
+          onChange={(e) => d.doiLoc({ hs: e.target.value })}
+        >
+          <option value="">Mọi trạng thái hồ sơ</option>
+          {LIFECYCLES.map((s) => (
+            <option key={s} value={s}>
+              {LIFECYCLE_LABEL[s]}
+            </option>
+          ))}
+        </select>
         <label htmlFor="tv-khu" className="sr">
           Khu showroom
         </label>
@@ -358,23 +376,47 @@ export function ThuVienScreen({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          className={cn('chip', filters.mau && 'on')}
-          aria-pressed={filters.mau}
-          onClick={() => d.latCo('mau')}
+        {/* Ba ô RÀ SOÁT hai chiều (20/11/2026) — kết hợp được với nhau và với
+            khách / loại: "MERXX · chưa có mẫu", "có mẫu · chưa treo thẻ"… */}
+        <label htmlFor="tv-mau" className="sr">
+          Mẫu showroom
+        </label>
+        <select
+          id="tv-mau"
+          className={cn('pick', filters.mau && 'on')}
+          value={filters.mau}
+          onChange={(e) => d.doiLoc({ mau: e.target.value })}
         >
-          Có mẫu <span className="n">{counts.mau}</span>
-        </button>
-        <button
-          type="button"
-          className={cn('chip', filters.the && 'on')}
-          aria-pressed={filters.the}
-          onClick={() => d.latCo('the')}
-          title="Có mẫu ở showroom nhưng chưa treo thẻ (phiếu 101026)"
+          <option value="">Mẫu: tất cả</option>
+          <option value="co">Có mẫu ({counts.mau.co})</option>
+          <option value="chua">Chưa có mẫu ({counts.mau.chua})</option>
+        </select>
+        <label htmlFor="tv-the" className="sr">
+          Thẻ treo
+        </label>
+        <select
+          id="tv-the"
+          className={cn('pick', filters.the && 'on')}
+          value={filters.the}
+          onChange={(e) => d.doiLoc({ the: e.target.value })}
         >
-          Chưa treo thẻ <span className="n">{counts.the}</span>
-        </button>
+          <option value="">Thẻ treo: tất cả</option>
+          <option value="da">Đã treo thẻ ({counts.treo.da})</option>
+          <option value="chua">Chưa treo thẻ ({counts.treo.chua})</option>
+        </select>
+        <label htmlFor="tv-anh" className="sr">
+          Ảnh đại diện
+        </label>
+        <select
+          id="tv-anh"
+          className={cn('pick', filters.anh && 'on')}
+          value={filters.anh}
+          onChange={(e) => d.doiLoc({ anh: e.target.value })}
+        >
+          <option value="">Ảnh: tất cả</option>
+          <option value="co">Có ảnh ({counts.anh.co})</option>
+          <option value="chua">Chưa có ảnh ({counts.anh.chua})</option>
+        </select>
         {d.dangLoc && (
           <button type="button" className="btn" onClick={d.boLoc}>
             Bỏ lọc

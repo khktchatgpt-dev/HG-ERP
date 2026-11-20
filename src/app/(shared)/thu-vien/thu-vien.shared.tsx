@@ -27,13 +27,19 @@ export type ThuVienFilters = {
   kh: string
   loai: string
   khung: string
+  /** Trạng thái hồ sơ (0145), '' = mọi trạng thái. */
+  hs: string
   thieu: '' | ThieuFilter
   kt: boolean
   tt: 'active' | 'inactive' | 'all'
   lenh: boolean
-  mau: boolean
+  /** Mẫu showroom: '' · có · chưa. */
+  mau: '' | 'co' | 'chua'
   /** Có mẫu chưa treo thẻ (0303). */
-  the: boolean
+  /** Thẻ treo: '' · đã treo · chưa treo. */
+  the: '' | 'da' | 'chua'
+  /** Ảnh đại diện: '' · có · chưa. */
+  anh: '' | 'co' | 'chua'
   /** Khu showroom (0304), '' = mọi khu. */
   khu: string
   gia: boolean

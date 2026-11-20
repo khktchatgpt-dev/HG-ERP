@@ -31,16 +31,22 @@ export type LibraryFilters = {
   kh: string
   loai: string
   khung: string
+  /** Trạng thái hồ sơ (0145) — '' / thiếu = mọi trạng thái. */
+  hs?: string
   thieu: '' | ThieuFilter
   /** Thiếu kích thước SP (dài × rộng × cao). */
   kt: boolean
   tt: 'active' | 'inactive' | 'all'
   /** Đang nằm trên ≥1 lệnh SX chưa xong. */
   lenh: boolean
-  /** Có mẫu ở showroom (ô tick 0303). */
-  mau: boolean
-  /** Có mẫu nhưng CHƯA treo thẻ (0303, phiếu 101026). */
-  the?: boolean
+  /**
+   * Ba bộ lọc RÀ SOÁT hai chiều (20/11/2026, chủ dự án: "lọc SP chưa có mẫu,
+   * chưa có thẻ treo theo khách… hay chưa có ảnh"): '' = không lọc.
+   * Mẫu showroom (ô tick 0303) · thẻ treo (ngày treo 0303) · ảnh đại diện.
+   */
+  mau: '' | 'co' | 'chua'
+  the?: '' | 'da' | 'chua'
+  anh?: '' | 'co' | 'chua'
   /** Khu showroom (0304) — '' / thiếu = mọi khu. */
   khu?: string
   /** Chưa có giá kế hoạch — chỉ có nghĩa khi người xem được thấy giá. */
@@ -54,9 +60,10 @@ export type LibraryCounts = {
   thieu: Record<ThieuFilter, number>
   kt: number
   lenh: number
-  mau: number
-  /** Có mẫu chưa treo thẻ (0303). */
-  the: number
+  /** Số SP theo hai chiều của ba bộ lọc rà soát — số trên ô chọn. */
+  mau: { co: number; chua: number }
+  treo: { da: number; chua: number }
+  anh: { co: number; chua: number }
   gia: number
   /** SP ngừng dùng trong tập khách/loại/khung đang lọc — số trên ô "Trạng thái". */
   ngung: number
@@ -171,6 +178,7 @@ function matchAttrs(f: Flag, o: LibraryFilters): boolean {
     return false
   if (o.loai && f.product_type !== o.loai) return false
   if (o.khung && f.frame_material !== o.khung) return false
+  if (o.hs && f.lifecycle !== o.hs) return false
   return true
 }
 
@@ -178,8 +186,12 @@ function matchSets(f: Flag, o: LibraryFilters): boolean {
   if (o.thieu && !matchThieu(f.check, o.thieu)) return false
   if (o.kt && f.has_dims) return false
   if (o.lenh && f.lsx_open === 0) return false
-  if (o.mau && !f.has_sample) return false
-  if (o.the && !(f.showroom_sample && !f.showroom_tagged_at)) return false
+  if (o.mau === 'co' && !f.has_sample) return false
+  if (o.mau === 'chua' && f.has_sample) return false
+  if (o.the === 'da' && !f.showroom_tagged_at) return false
+  if (o.the === 'chua' && f.showroom_tagged_at) return false
+  if (o.anh === 'co' && f.check.anh === 'thieu') return false
+  if (o.anh === 'chua' && f.check.anh !== 'thieu') return false
   if (o.khu && f.showroom_zone !== o.khu) return false
   if (o.gia && f.plan_price != null) return false
   return true
@@ -260,8 +272,9 @@ export const libraryService = {
       thieu: { any: 0, bom: 0, bv: 0, anh: 0, dg: 0, xc: 0, mau: 0 },
       kt: 0,
       lenh: 0,
-      mau: 0,
-      the: 0,
+      mau: { co: 0, chua: 0 },
+      treo: { da: 0, chua: 0 },
+      anh: { co: 0, chua: 0 },
       gia: 0,
       ngung: [...flags.values()].filter((f) => matchAttrs(f, { ...o, tt: 'inactive' }))
         .length,
@@ -272,14 +285,24 @@ export const libraryService = {
       for (const k of th) counts.thieu[k]++
       if (!f.has_dims) counts.kt++
       if (f.lsx_open > 0) counts.lenh++
-      if (f.has_sample) counts.mau++
-      if (f.showroom_sample && !f.showroom_tagged_at) counts.the++
+      counts.mau[f.has_sample ? 'co' : 'chua']++
+      counts.treo[f.showroom_tagged_at ? 'da' : 'chua']++
+      counts.anh[f.check.anh === 'thieu' ? 'chua' : 'co']++
       if (f.plan_price == null) counts.gia++
     }
 
     // ── lấy trang: lọc TẬP (thiếu/kt/lệnh/mẫu/giá) tính ở app → đưa id xuống DB ──
     const setFilterOn =
-      !!o.thieu || o.kt || o.lenh || o.mau || o.the || !!o.khu || o.gia
+      // Trạng thái hồ sơ chỉ lọc ở app (listLite không có cột này) → đi đường id.
+      !!o.thieu ||
+      o.kt ||
+      o.lenh ||
+      !!o.mau ||
+      !!o.the ||
+      !!o.anh ||
+      !!o.khu ||
+      !!o.hs ||
+      o.gia
     const ids = setFilterOn
       ? base.filter((f) => matchSets(f, o)).map((f) => f.id)
       : undefined

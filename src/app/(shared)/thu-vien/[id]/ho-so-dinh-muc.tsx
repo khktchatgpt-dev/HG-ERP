@@ -429,7 +429,7 @@ export function HoSoDinhMuc({
         <div className="pad">
           {d.check.bom === 'khong_ap_dung'
             ? 'Loại SP này không cần định mức (phụ kiện bán rời).'
-            : 'Chưa có dòng định mức nào. Bật Sửa để gõ, hoặc đọc từ file BOM ở thư viện.'}
+            : 'Chưa có dòng định mức nào. Bật Sửa để gõ, hoặc dùng Đọc file BOM / Dán từ Excel / Chép từ SP khác ở trên.'}
         </div>
       ) : (
         <table className={cn('luoi', sua && 'sua')} aria-label="Định mức vật tư">

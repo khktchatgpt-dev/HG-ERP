@@ -6,6 +6,7 @@ import { MoreHorizontal, Plus, Search, SlidersHorizontal } from 'lucide-react'
 import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 import { HO_SO_LABEL, HO_SO_O } from '@/lib/ho-so-sp'
 import { SHOWROOM_ZONES } from '@/lib/showroom'
+import { LIFECYCLES, LIFECYCLE_LABEL } from '@/lib/product-lifecycle'
 import { locQuery } from './thu-vien.filters'
 import {
   fmtGia,
@@ -27,7 +28,9 @@ import type { ThuVienCtx } from './useThuVien'
 
 /** Số điều kiện đang bật trong tấm Lọc (không tính từ khoá và tab "Thiếu…"). */
 function soLoc(f: ThuVienFilters): number {
-  return [f.kh, f.loai, f.khung, f.khu, f.mau, f.the, f.tt !== 'active'].filter(Boolean)
+  return [f.kh, f.loai, f.khung, f.hs, f.khu, f.mau, f.the, f.anh, f.tt !== 'active'].filter(
+    Boolean,
+  )
     .length
 }
 
@@ -39,9 +42,14 @@ function tomTat(f: ThuVienFilters): string {
     f.loai && `Loại: ${PRODUCT_TYPES.find((t) => t.code === f.loai)?.label ?? f.loai}`,
     f.khung &&
       `Khung: ${FRAME_MATERIALS.find((m) => m.code === f.khung)?.label ?? f.khung}`,
+    f.hs && `Hồ sơ: ${LIFECYCLE_LABEL[f.hs as keyof typeof LIFECYCLE_LABEL] ?? f.hs}`,
     f.khu && `Khu ${f.khu}`,
-    f.mau && 'Có mẫu',
-    f.the && 'Chưa treo thẻ',
+    f.mau === 'co' && 'Có mẫu',
+    f.mau === 'chua' && 'Chưa có mẫu',
+    f.the === 'da' && 'Đã treo thẻ',
+    f.the === 'chua' && 'Chưa treo thẻ',
+    f.anh === 'co' && 'Có ảnh',
+    f.anh === 'chua' && 'Chưa có ảnh',
     f.tt === 'inactive' && 'Ngừng dùng',
     f.tt === 'all' && 'Cả SP ngừng',
   ]
@@ -310,7 +318,17 @@ function TamLoc({
           <button
             type="button"
             onClick={() =>
-              d.doiLoc({ kh: '', loai: '', khung: '', khu: '', mau: '', the: '', tt: '' })
+              d.doiLoc({
+                kh: '',
+                loai: '',
+                khung: '',
+                hs: '',
+                khu: '',
+                mau: '',
+                the: '',
+                anh: '',
+                tt: '',
+              })
             }
           >
             Bỏ hết
@@ -366,17 +384,51 @@ function TamLoc({
               ))}
             </select>
           </div>
+          <div className="fld">
+            <label htmlFor="dt-hs">Trạng thái hồ sơ</label>
+            <select
+              id="dt-hs"
+              className={filters.hs ? 'on' : undefined}
+              value={filters.hs}
+              onChange={(e) => d.doiLoc({ hs: e.target.value })}
+            >
+              <option value="">Mọi trạng thái</option>
+              {LIFECYCLES.map((s) => (
+                <option key={s} value={s}>
+                  {LIFECYCLE_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </div>
           <Seg
             label="Mẫu showroom"
-            value={filters.the ? 'the' : filters.mau ? 'mau' : ''}
+            value={filters.mau}
             opts={[
               { v: '', t: 'Tất cả' },
-              { v: 'mau', t: `Có mẫu ${counts.mau}` },
-              { v: 'the', t: `Chưa treo thẻ ${counts.the}` },
+              { v: 'co', t: `Có ${counts.mau.co}` },
+              { v: 'chua', t: `Chưa có ${counts.mau.chua}` },
             ]}
-            onPick={(v) =>
-              d.doiLoc({ mau: v === 'mau' ? '1' : '', the: v === 'the' ? '1' : '' })
-            }
+            onPick={(v) => d.doiLoc({ mau: v })}
+          />
+          <Seg
+            label="Thẻ treo"
+            value={filters.the}
+            opts={[
+              { v: '', t: 'Tất cả' },
+              { v: 'da', t: `Đã treo ${counts.treo.da}` },
+              { v: 'chua', t: `Chưa treo ${counts.treo.chua}` },
+            ]}
+            onPick={(v) => d.doiLoc({ the: v })}
+          />
+          <Seg
+            label="Ảnh đại diện"
+            value={filters.anh}
+            opts={[
+              { v: '', t: 'Tất cả' },
+              { v: 'co', t: `Có ảnh ${counts.anh.co}` },
+              { v: 'chua', t: `Chưa có ${counts.anh.chua}` },
+            ]}
+            onPick={(v) => d.doiLoc({ anh: v })}
           />
           <Seg
             label="Khu showroom"

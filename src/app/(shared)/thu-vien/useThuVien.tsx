@@ -46,7 +46,7 @@ export function useThuVien({
 
   /** Chip/ô bật-tắt: bấm lại giá trị đang bật thì bỏ. */
   const lat = (k: 'thieu', v: string) => doiLoc({ [k]: filters[k] === v ? '' : v })
-  const latCo = (k: 'kt' | 'lenh' | 'mau' | 'the' | 'gia') =>
+  const latCo = (k: 'kt' | 'lenh' | 'gia') =>
     doiLoc({ [k]: filters[k] ? '' : '1' })
 
   const dangLoc =
@@ -54,11 +54,13 @@ export function useThuVien({
     !!filters.kh ||
     !!filters.loai ||
     !!filters.khung ||
+    !!filters.hs ||
     !!filters.thieu ||
     filters.kt ||
     filters.lenh ||
-    filters.mau ||
-    filters.the ||
+    !!filters.mau ||
+    !!filters.the ||
+    !!filters.anh ||
     !!filters.khu ||
     filters.gia ||
     filters.tt !== 'active'
@@ -68,11 +70,13 @@ export function useThuVien({
       kh: '',
       loai: '',
       khung: '',
+      hs: '',
       thieu: '',
       kt: '',
       lenh: '',
       mau: '',
       the: '',
+      anh: '',
       khu: '',
       gia: '',
       tt: '',

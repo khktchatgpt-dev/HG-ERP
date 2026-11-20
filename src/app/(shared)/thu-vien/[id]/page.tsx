@@ -1,8 +1,14 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
-import { canEditBom, canEditProducts } from '@/modules/dept/technical/technical.service'
+import {
+  canEditBom,
+  canEditProducts,
+  canLockProducts,
+  canSetLifecycle,
+} from '@/modules/dept/technical/technical.service'
 import { profileService } from '@/modules/dept/technical/profile.service'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { HttpError } from '@/server/http'
 import { HoSoScreen } from './HoSoScreen'
 import { toHoSoView } from './ho-so.shared'
@@ -26,26 +32,39 @@ export default async function HoSoSanPhamPage({
 }) {
   const user = await authService.requirePageUser()
   const [{ id }, sp] = await Promise.all([params, searchParams])
-  const [canEdit, canBom, canPrice, canRemove] = await Promise.all([
+  const [canEdit, canBom, canPrice, canRemove, canLock, canStatus] = await Promise.all([
     canEditProducts(user),
     canEditBom(user),
     canAction(user, 'technical.plan_cost.view'),
     canAction(user, 'technical.product.remove'),
+    canLockProducts(user),
+    canSetLifecycle(user),
   ])
   let data
+  // Nhân sự đang làm (ô Người phụ trách, chỉ cần khi sửa được) — chép cách trang
+  // /products cũ nạp, B2 20/11/2026. "Danh mục SP" KHÔNG đưa sang: danh mục
+  // product_category rỗng, 0/167 SP dùng (đo 20/11).
+  let owners: { id: string; name: string }[] = []
   try {
-    data = await profileService.hoSo(user, id, canPrice)
+    const [hoSo, staff] = await Promise.all([
+      profileService.hoSo(user, id, canPrice),
+      canEdit ? usersRepo.list({ active_only: true }) : Promise.resolve([]),
+    ])
+    data = hoSo
+    owners = staff.map((u) => ({ id: u.id, name: u.name || u.email }))
   } catch (e) {
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
   return (
     <HoSoScreen
-      d={toHoSoView(data)}
+      d={toHoSoView(data, { owners })}
       canEdit={canEdit}
       canPrice={canPrice}
       canBom={canBom}
       canRemove={canRemove}
+      canLock={canLock}
+      canStatus={canStatus}
       // Vừa tạo xong (form gọn) → mở thẳng ở chế độ sửa để điền tiếp.
       batDauSua={sp.sua === '1'}
     />

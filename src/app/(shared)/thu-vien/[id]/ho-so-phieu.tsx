@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { uploadFileTracked } from '@/lib/upload'
 import { KHUNG_LABEL, LOAI_LABEL } from '../thu-vien.shared'
 import { nz, type HoSoView } from './ho-so.shared'
-import type { HoSoCtx, OSua } from './useHoSo'
+import type { HoSoCtx, OChon, OSua } from './useHoSo'
 
 /**
  * KHỐI ẢNH + THÔNG SỐ KỸ THUẬT — bản thẻ 09/10/2026 (bản vẽ
@@ -57,12 +57,7 @@ export function HoSoPhieu({ d, c }: { d: HoSoView; c: HoSoCtx }) {
       ? `${d.length_open_mm ? nz(d.length_open_mm, 0) : '—'} × ${d.width_open_mm ? nz(d.width_open_mm, 0) : '—'} × ${d.height_open_mm ? nz(d.height_open_mm, 0) : '—'} mm`
       : null
   const ghiChuLsx =
-    [
-      d.tech_spec.paint && `Sơn: ${d.tech_spec.paint}`,
-      d.tech_spec.wood && `Gỗ: ${d.tech_spec.wood}`,
-      d.tech_spec.glass && `Kính: ${d.tech_spec.glass}`,
-      d.tech_spec.cushion && `Nệm: ${d.tech_spec.cushion}`,
-    ]
+    TS_LSX.map(([k, t]) => d.tech_spec[k] && `${t}: ${d.tech_spec[k]}`)
       .filter(Boolean)
       .join(' · ') || null
 
@@ -245,28 +240,159 @@ export function HoSoPhieu({ d, c }: { d: HoSoView; c: HoSoCtx }) {
                 <td className="l">Thông số in LSX</td>
                 <td className="v" colSpan={3}>
                   {c.suaDuoc ? (
-                    <>
-                      <span className="muted">Sơn </span>
-                      <V c={c} d={d} label="Sơn (mã màu)" field="ts_paint" v={d.tech_spec.paint || null} trong="sơn" w={120} />
-                      <span className="dot">·</span>
-                      <span className="muted">Gỗ </span>
-                      <V c={c} d={d} label="Gỗ" field="ts_wood" v={d.tech_spec.wood || null} trong="gỗ" w={120} />
-                      <span className="dot">·</span>
-                      <span className="muted">Kính </span>
-                      <V c={c} d={d} label="Kính" field="ts_glass" v={d.tech_spec.glass || null} trong="kính" w={110} />
-                      <span className="dot">·</span>
-                      <span className="muted">Nệm </span>
-                      <V c={c} d={d} label="Nệm / mút" field="ts_cushion" v={d.tech_spec.cushion || null} trong="nệm" w={110} />
-                    </>
+                    <span className="ts-sua">
+                      {TS_LSX.map(([k, t, ph]) => (
+                        <span key={k}>
+                          <span className="muted">{t} </span>
+                          <V
+                            c={c}
+                            d={d}
+                            label={ph}
+                            field={`ts_${k}` as OSua}
+                            v={d.tech_spec[k] || null}
+                            trong={t.toLowerCase()}
+                            w={120}
+                          />
+                        </span>
+                      ))}
+                    </span>
                   ) : (
                     (ghiChuLsx ?? <span className="muted">chưa khai</span>)
                   )}
                 </td>
               </tr>
               <tr>
+                <td className="l">Barcode · KL cân</td>
+                <td className="v kt">
+                  <V
+                    c={c}
+                    d={d}
+                    label="Barcode"
+                    field="barcode"
+                    v={d.barcode}
+                    trong="chưa khai"
+                    thieu
+                    w={130}
+                  />
+                  <span className="dot">·</span>
+                  <V
+                    c={c}
+                    d={d}
+                    label="KL cân thực tế (kg)"
+                    field="actual_weight_kg"
+                    v={
+                      d.actual_weight_kg != null
+                        ? `${nz(d.actual_weight_kg, 3)} kg`
+                        : null
+                    }
+                    trong="chưa cân"
+                    w={80}
+                  />
+                </td>
+                <td className="l">Lắp ráp · bộ gồm</td>
+                <td className="v">
+                  <Chon
+                    c={c}
+                    field="assembly"
+                    label="Lắp ráp"
+                    value={d.assembly ?? ''}
+                    opts={[
+                      { v: '', t: '—' },
+                      { v: 'assembled', t: 'Nguyên chiếc' },
+                      { v: 'kd', t: 'Tháo rời (KD)' },
+                    ]}
+                  />
+                  <span className="dot">·</span>
+                  <V
+                    c={c}
+                    d={d}
+                    label="Bộ gồm"
+                    field="set_contents"
+                    v={d.set_contents}
+                    trong={d.is_set ? 'chưa khai' : '—'}
+                    w={150}
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td className="l">Đặc tính</td>
+                <td className="v">
+                  {c.suaDuoc ? (
+                    <>
+                      <Co
+                        c={c}
+                        field="is_upholstered"
+                        label="Có nệm / bọc"
+                        on={d.is_upholstered}
+                      />
+                      <span className="dot">·</span>
+                      <Co c={c} field="has_glass" label="Có kính" on={d.has_glass} />
+                      <span className="dot">·</span>
+                      <Co c={c} field="is_set" label="Bộ nhiều món" on={d.is_set} />
+                    </>
+                  ) : (
+                    // Khi xem chỉ kể cái CÓ — ba chữ "không …" là nhiễu.
+                    [
+                      d.is_upholstered && 'Có nệm / bọc',
+                      d.has_glass && 'Có kính',
+                      d.is_set && 'Bộ nhiều món',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || <span className="muted">—</span>
+                  )}
+                </td>
+                <td className="l">Bản vẽ BOM</td>
+                <td className="v">
+                  <Chon
+                    c={c}
+                    field="bom_status"
+                    label="Trạng thái bản vẽ BOM"
+                    value={d.bom_status}
+                    opts={[
+                      { v: 'none', t: 'Chưa có BOM' },
+                      { v: 'drawing', t: 'Đang vẽ' },
+                      { v: 'done', t: 'Đã vẽ' },
+                    ]}
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td className="l">Mô tả tiếng Anh</td>
+                <td className="v" colSpan={3}>
+                  <V
+                    c={c}
+                    d={d}
+                    label="Mô tả tiếng Anh"
+                    field="description_en"
+                    v={d.description_en}
+                    trong="chưa khai"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td className="l">Shipping mark</td>
+                <td className="v" colSpan={3}>
+                  <V
+                    c={c}
+                    d={d}
+                    label="Shipping mark (ký mã hiệu in trên thùng)"
+                    field="shipping_mark"
+                    v={d.shipping_mark}
+                    trong="chưa khai"
+                  />
+                </td>
+              </tr>
+              <tr>
                 <td className="l">Ghi chú</td>
                 <td className="v" colSpan={3}>
-                  <V c={c} d={d} label="Ghi chú" field="notes" v={d.notes} trong="chưa có ghi chú" />
+                  <V
+                    c={c}
+                    d={d}
+                    label="Ghi chú"
+                    field="notes"
+                    v={d.notes}
+                    trong="chưa có ghi chú"
+                  />
                 </td>
               </tr>
               <tr>
@@ -309,7 +435,22 @@ export function HoSoPhieu({ d, c }: { d: HoSoView; c: HoSoCtx }) {
                 </td>
                 <td className="l">Người tạo · phụ trách</td>
                 <td className="v">
-                  {d.creatorName ?? '—'} · {d.ownerName ?? '—'}
+                  {d.creatorName ?? '—'} ·{' '}
+                  <Chon
+                    c={c}
+                    field="owner_id"
+                    label="Người phụ trách"
+                    value={d.owner_id ?? ''}
+                    show={d.ownerName}
+                    opts={[
+                      { v: '', t: '— chưa giao' },
+                      // Người phụ trách đã nghỉ vẫn phải hiện được trong ô chọn.
+                      ...(d.owner_id && !d.owners.some((o) => o.id === d.owner_id)
+                        ? [{ v: d.owner_id, t: d.ownerName ?? 'người đã nghỉ' }]
+                        : []),
+                      ...d.owners.map((o) => ({ v: o.id, t: o.name })),
+                    ]}
+                  />
                 </td>
               </tr>
             </tbody>
@@ -317,6 +458,82 @@ export function HoSoPhieu({ d, c }: { d: HoSoView; c: HoSoCtx }) {
         </div>
       </section>
     </div>
+  )
+}
+
+/** Tám ô của jsonb `tech_spec` in lên LSX — [khoá, nhãn ngắn, nhãn đủ]. */
+const TS_LSX = [
+  ['machine', 'Máy', 'Máy'],
+  ['paint', 'Sơn', 'Sơn (mã màu)'],
+  ['wood', 'Gỗ', 'Gỗ'],
+  ['glass', 'Kính', 'Kính'],
+  ['cushion', 'Nệm', 'Nệm / mút'],
+  ['fabric', 'Vải', 'Vải'],
+  ['hardware', 'Ngũ kim', 'Phụ kiện ngũ kim'],
+  ['finish', 'Finish', 'Màu hoàn thiện (finish)'],
+] as const
+
+/** Ô CHỌN một giá trị (lắp ráp, BOM, người phụ trách): đổi là lưu ngay. */
+function Chon({
+  c,
+  field,
+  label,
+  value,
+  opts,
+  show,
+}: {
+  c: HoSoCtx
+  field: OChon
+  label: string
+  value: string
+  opts: { v: string; t: string }[]
+  /** Chữ bày khi xem (mặc định = nhãn của lựa chọn đang chọn). */
+  show?: string | null
+}) {
+  if (!c.suaDuoc) {
+    const t = show ?? (value ? opts.find((o) => o.v === value)?.t : null)
+    return t ? <span>{t}</span> : <span className="muted">—</span>
+  }
+  return (
+    <select
+      className="cell"
+      aria-label={label}
+      value={value}
+      disabled={c.busy === field}
+      onChange={(e) => void c.luuChon(field, e.target.value)}
+    >
+      {opts.map((o) => (
+        <option key={o.v} value={o.v}>
+          {o.t}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+/** Ô TICK có / không ở chế độ sửa — bấm là lưu. */
+function Co({
+  c,
+  field,
+  label,
+  on,
+}: {
+  c: HoSoCtx
+  field: OChon
+  label: string
+  on: boolean
+}) {
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <input
+        type="checkbox"
+        aria-label={label}
+        checked={on}
+        disabled={c.busy === field}
+        onChange={(e) => void c.luuChon(field, e.target.checked)}
+      />
+      {label}
+    </label>
   )
 }
 

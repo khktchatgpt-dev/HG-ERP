@@ -22,11 +22,20 @@ export type OSua =
   | 'net_weight_kg'
   | 'max_load_kg'
   | 'notes'
+  | 'barcode'
+  | 'description_en'
+  | 'shipping_mark'
+  | 'set_contents'
+  | 'actual_weight_kg'
   // Thông số in LSX nằm trong jsonb tech_spec — service GỘP, gửi một khoá là đủ.
   | 'ts_paint'
   | 'ts_wood'
   | 'ts_glass'
   | 'ts_cushion'
+  | 'ts_machine'
+  | 'ts_fabric'
+  | 'ts_hardware'
+  | 'ts_finish'
 
 const SO: ReadonlySet<OSua> = new Set([
   'length_mm',
@@ -34,7 +43,17 @@ const SO: ReadonlySet<OSua> = new Set([
   'height_mm',
   'net_weight_kg',
   'max_load_kg',
+  'actual_weight_kg',
 ])
+
+/** Trường chọn (ô select / ô tick) — ghi nguyên giá trị, không parse chữ. */
+export type OChon =
+  | 'assembly'
+  | 'is_upholstered'
+  | 'has_glass'
+  | 'is_set'
+  | 'bom_status'
+  | 'owner_id'
 
 /** State + xử lý của màn Hồ sơ SP: sửa tại chỗ từng ô, ảnh đang xem. */
 export function useHoSo({
@@ -50,7 +69,7 @@ export function useHoSo({
   const router = useRouter()
   const toast = useToast()
   const [dangSua, setDangSua] = useState<OSua | null>(null)
-  const [busy, setBusy] = useState<OSua | null>(null)
+  const [busy, setBusy] = useState<OSua | OChon | null>(null)
   const [anh, setAnh] = useState(0)
   /**
    * CHẾ ĐỘ SỬA bật/tắt ở đầu trang (08/10/2026, chủ dự án: "chưa phân biệt
@@ -102,6 +121,24 @@ export function useHoSo({
     }
   }
 
+  /** Ghi MỘT trường chọn (select / tick): giá trị đã đúng kiểu, '' = bỏ trống. */
+  async function luuChon(field: OChon, value: string | boolean | null): Promise<void> {
+    const v = value === '' ? null : value
+    if ((d[field] ?? null) === v) return
+    setBusy(field)
+    try {
+      await api(`/api/dept/technical/products/${d.id}`, {
+        method: 'PATCH',
+        body: { [field]: v },
+      })
+      router.refresh()
+    } catch (e) {
+      toast.error('Chưa lưu được', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   /**
    * Ghi ô tóm tắt đóng gói (jsonb `packing`): trộn lên giá trị cũ, khoá trống
    * thì XOÁ chứ không ghi null — cùng nếp với PackingEditor cũ.
@@ -140,6 +177,7 @@ export function useHoSo({
     setDangSua,
     busy,
     luu,
+    luuChon,
     suaDuoc,
     khoa,
     anh,

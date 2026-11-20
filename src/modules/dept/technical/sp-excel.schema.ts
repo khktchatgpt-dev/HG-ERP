@@ -38,6 +38,8 @@ export const spExcelExportQuerySchema = z.object({
   kh: z.string().max(200).optional(),
   loai: z.string().max(4).optional(),
   khung: z.string().max(4).optional(),
+  /** Trạng thái hồ sơ (0145). */
+  hs: z.string().max(20).optional(),
   thieu: z.string().max(20).optional(),
   kt: z.string().optional(),
   tt: z.string().optional(),
@@ -47,6 +49,8 @@ export const spExcelExportQuerySchema = z.object({
   the: z.string().optional(),
   /** Khu showroom (0304). */
   khu: z.string().max(4).optional(),
+  /** Ảnh đại diện: co / chua. */
+  anh: z.string().max(4).optional(),
   /**
    * Mẫu showroom (0303) — nút Xuất ở `/products`: `co` = có mẫu, `chua_the` =
    * có mẫu chưa treo thẻ.

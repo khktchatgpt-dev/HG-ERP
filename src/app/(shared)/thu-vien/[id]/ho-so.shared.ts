@@ -9,7 +9,10 @@ import { SHAPE_OPTIONS } from '@/lib/bom-calc'
 export type HoSoView = ReturnType<typeof toHoSoView>
 
 /** Chỉ truyền xuống client thứ màn cần — `Product` đầy đủ 80 cột, phần lớn không bày. */
-export function toHoSoView(d: HoSoData) {
+export function toHoSoView(
+  d: HoSoData,
+  lists: { owners: { id: string; name: string }[] } = { owners: [] },
+) {
   const p = d.product
   const ts = (p.tech_spec ?? {}) as Record<string, string | undefined>
   return {
@@ -27,6 +30,7 @@ export function toHoSoView(d: HoSoData) {
     is_active: p.is_active,
     locked_at: p.locked_at,
     lifecycle: p.lifecycle,
+    lifecycle_at: p.lifecycle_at,
     bom_status: p.bom_status,
     length_mm: p.length_mm,
     width_mm: p.width_mm,
@@ -41,6 +45,16 @@ export function toHoSoView(d: HoSoData) {
     hs_code: p.hs_code,
     origin_country: p.origin_country,
     notes: p.notes,
+    // Thông số xuất khẩu / sản xuất (B2 20/11/2026 — trước chỉ sửa được ở /products cũ).
+    barcode: p.barcode,
+    description_en: p.description_en,
+    shipping_mark: p.shipping_mark,
+    set_contents: p.set_contents,
+    assembly: p.assembly,
+    is_upholstered: p.is_upholstered,
+    has_glass: p.has_glass,
+    owner_id: p.owner_id,
+    owners: lists.owners,
     // Lộ trình công đoạn nằm ở cụm (`first_stage`/`final_stage`), chưa có trên SP → để trống.
     stage_route: null as string[] | null,
     tech_spec: {
@@ -48,6 +62,10 @@ export function toHoSoView(d: HoSoData) {
       wood: ts.wood ?? '',
       glass: ts.glass ?? '',
       cushion: ts.cushion ?? '',
+      machine: ts.machine ?? '',
+      fabric: ts.fabric ?? '',
+      hardware: ts.hardware ?? '',
+      finish: ts.finish ?? '',
     },
     rev: d.rev,
     creatorName: d.creatorName,
@@ -82,7 +100,21 @@ export function toHoSoView(d: HoSoData) {
       note: x.note,
     })),
     groups: d.groups.map((g) => ({ code: g.code, label: g.label })),
-    clusters: d.clusters.map((c) => ({ id: c.id, name: c.name })),
+    clusters: d.clusters.map((c) => ({
+      id: c.id,
+      name: c.name,
+      qty_per_product: c.qty_per_product,
+    })),
+    // Công cụ định mức (B3): ba hộp thoại dùng chung cần đủ nhóm (thứ tự, cha),
+    // "Tổng hợp vật tư" cần dòng đầy đủ (quy đổi đơn vị mua).
+    groupsFull: d.groups.map((g) => ({
+      code: g.code,
+      label: g.label,
+      parent_code: g.parent_code,
+      sort_order: g.sort_order,
+    })),
+    partsRaw: d.parts,
+    paint_coverage_m2_per_kg: p.paint_coverage_m2_per_kg,
     setItems: d.setItems,
     packingCount: d.packing.length,
     packingDefault: d.packing.find((o) => o.is_default) ?? d.packing[0] ?? null,
