@@ -91,7 +91,7 @@ function NguonTheoSp({ d }: { d: KeHoachCtx }) {
               className={`grid min-w-0 gap-0.5 border-r border-b border-[var(--hair)] px-4 py-1 ${p.coded_parts > 0 ? '' : 'bg-[var(--warn-wash)]'}`}
             >
               <span className="flex min-w-0 items-baseline gap-2 text-[12px]">
-                <Link href={`/products/${p.id}/dinh-muc`} className={`font-mono ${LINK}`}>
+                <Link href={`/thu-vien/${p.id}?tab=dinh-muc`} className={`font-mono ${LINK}`}>
                   {p.code}
                 </Link>
                 <span className="font-mono text-[var(--ink-2)]">× {so0(p.qty)}</span>
@@ -197,7 +197,7 @@ function KhoiChan({ d }: { d: KeHoachCtx }) {
                       ) : pid ? (
                         <>
                           Kỹ thuật ·{' '}
-                          <Link href={`/products/${pid}/dinh-muc`} className={LINK}>
+                          <Link href={`/thu-vien/${pid}?tab=dinh-muc`} className={LINK}>
                             Hồ sơ SP
                           </Link>
                         </>
@@ -526,7 +526,7 @@ function RongLenh({ d }: { d: KeHoachCtx }) {
           </Nut>
         )}
         {products.slice(0, 3).map((p) => (
-          <Nut key={p.id} href={`/products/${p.id}/dinh-muc`}>
+          <Nut key={p.id} href={`/thu-vien/${p.id}?tab=dinh-muc`}>
             Định mức {p.code}
           </Nut>
         ))}

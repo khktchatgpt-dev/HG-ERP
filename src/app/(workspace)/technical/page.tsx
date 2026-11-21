@@ -61,7 +61,7 @@ export default async function TechnicalHome() {
             <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
               Sản phẩm gần đây
             </h2>
-            <Link href="/products" className="text-xs text-zinc-500 hover:underline">
+            <Link href="/thu-vien" className="text-xs text-zinc-500 hover:underline">
               Xem thư viện →
             </Link>
           </div>
@@ -120,10 +120,10 @@ export default async function TechnicalHome() {
             Thao tác nhanh
           </h2>
           <div className="flex flex-col gap-2">
-            <QuickAction href="/products" title="Mở thư viện sản phẩm" />
+            <QuickAction href="/thu-vien" title="Mở thư viện sản phẩm" />
             <QuickAction href="/technical/load-cont" title="Tính load cont" />
             {canEdit && (
-              <QuickAction href="/products?new=1" title="+ Thêm sản phẩm mới" />
+              <QuickAction href="/thu-vien" title="+ Thêm sản phẩm mới" />
             )}
             <QuickAction href="/phan-cong-viec" title="Việc của tôi" />
           </div>

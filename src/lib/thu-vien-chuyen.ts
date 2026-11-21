@@ -10,8 +10,8 @@
  *   /products/<id>/<tab>            → /thu-vien/<id>?tab=<tab mới>
  *   /technical/products…            → như /products…
  *
- * `?cu=1` giữ nguyên trang cũ — lối thoát cho phần chưa chuyển (đổi / xoá ảnh, lộ
- * trình — bước B5) cho tới khi xoá hẳn thư mục cũ.
+ * Thư mục cũ ĐÃ XOÁ (B6, 20/11/2026) — hàm này vẫn phải giữ: QR trên thẻ treo đã
+ * in trỏ `/products/<id>`.
  */
 
 /** Tab của trang cũ → tab của hồ sơ mới; `null` = mở hồ sơ ở tab mặc định. */
@@ -44,7 +44,6 @@ export function chuyenThuVienCu(pathname: string, search: string): string | null
   if (path !== '/products' && !path.startsWith('/products/')) return null
 
   const sp = new URLSearchParams(search)
-  if (sp.get('cu') === '1') return path === pathname ? null : path + (search || '')
 
   const parts = path.split('/').filter(Boolean) // ['products', id?, tab?]
   const id = parts[1]

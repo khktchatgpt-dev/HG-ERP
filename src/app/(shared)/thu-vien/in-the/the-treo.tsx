@@ -19,7 +19,7 @@ export function TheTreoTag({
   origin: string
   anh: boolean
 }) {
-  const qr = useMemo(() => qrPath(`${origin}/products/${t.id}`), [origin, t.id])
+  const qr = useMemo(() => qrPath(`${origin}/thu-vien/${t.id}`), [origin, t.id])
   const o = (v: number | undefined) => (
     <b className={v ? undefined : 'blank'}>{v ?? ''}</b>
   )

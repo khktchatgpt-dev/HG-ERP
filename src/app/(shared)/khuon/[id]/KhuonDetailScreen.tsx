@@ -308,7 +308,7 @@ export function KhuonDetailScreen({
                 {usage.map((u, i) => (
                   <GridRow key={`${u.product_id}-${i}`}>
                     <Td>
-                      <Code as="a" href={`/products/${u.product_id}`}>
+                      <Code as="a" href={`/thu-vien/${u.product_id}`}>
                         {u.product_code ?? '—'}
                       </Code>
                     </Td>

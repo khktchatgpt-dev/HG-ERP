@@ -400,38 +400,38 @@
   position: relative;
   background: #ffffff;
 }
+/*
+ * ĐƯỜNG CẮT (21/11/2026): máy in văn phòng không in được ~4–5 mm sát mép giấy,
+ * nên thẻ thu nhỏ đúng tỉ lệ A5 để chừa lề ≥ 6 mm, các thẻ ghép sát nhau và mỗi
+ * thẻ có khung nét đứt — cắt theo khung là ra thẻ, không phải đo. Khung là
+ * `outline` (không chiếm chỗ), hai thẻ cạnh nhau dùng chung một nét ở giữa.
+ */
 .tt-sheet.k2 {
   width: 297mm;
   height: 210mm;
   display: flex;
+  align-items: center;
   justify-content: center;
+}
+.tt-sheet.k2 .tt {
+  /* 198 mm cao (lề 6 mm) → 139,5 × 198 mm */
+  --u: 0.9429mm;
 }
 .tt-sheet.k4 {
   width: 210mm;
   height: 297mm;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  justify-items: center;
+  grid-template-columns: max-content max-content;
+  grid-template-rows: max-content max-content;
+  align-content: center;
+  justify-content: center;
 }
 .tt-sheet.k4 .tt {
-  --u: 0.7071mm;
+  /* 99 mm rộng (lề 6 mm) → 99 × 140,5 mm */
+  --u: 0.6689mm;
 }
-.tt-sheet::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  border-left: 1px dashed #8b929c;
-}
-.tt-sheet.k4::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  border-top: 1px dashed #8b929c;
+.tt-sheet .tt {
+  outline: 0.3mm dashed #4b5563;
 }
 
 /* Bản in nằm ngoài khung nhìn khi đang chuẩn bị (ảnh vẫn tải). */

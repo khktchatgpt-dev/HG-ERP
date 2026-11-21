@@ -169,7 +169,7 @@ export function KhoiBaoGiaDong({ d }: { d: BaoGiaCtx }) {
                     </span>
                     <span className="text-muted-foreground block truncate text-[11px] leading-4">
                       <Link
-                        href={`/products/${l.product_id}`}
+                        href={`/thu-vien/${l.product_id}`}
                         className="font-mono text-[var(--primary)] hover:underline"
                       >
                         {l.product_code}

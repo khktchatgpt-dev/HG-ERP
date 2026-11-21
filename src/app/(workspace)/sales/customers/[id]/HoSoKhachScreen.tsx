@@ -533,7 +533,7 @@ function KhoiSanPham({ d }: { d: HoSoKhachCtx }) {
       }
       actions={
         <Link
-          href={`/products?customer=${encodeURIComponent(d.c.name)}`}
+          href={`/thu-vien?kh=${encodeURIComponent(d.c.name)}`}
           className="text-xs text-[var(--primary)] hover:underline"
         >
           Thư viện SP
@@ -589,7 +589,7 @@ function KhoiSanPham({ d }: { d: HoSoKhachCtx }) {
                 </td>
                 <td className={`${TD} min-w-0`}>
                   <Link
-                    href={`/products/${p.id}`}
+                    href={`/thu-vien/${p.id}`}
                     className="block truncate font-mono text-xs text-[var(--primary)] hover:underline"
                   >
                     {p.code}
@@ -664,7 +664,7 @@ function KhoiGiaDaChao({ d }: { d: HoSoKhachCtx }) {
               <tr key={r.product_id} className="hover:bg-muted/40">
                 <td className={`${TD} truncate`}>
                   <Link
-                    href={`/products/${r.product_id}`}
+                    href={`/thu-vien/${r.product_id}`}
                     className="font-mono text-xs text-[var(--primary)] hover:underline"
                   >
                     {r.code}

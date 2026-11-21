@@ -586,7 +586,7 @@ function Dong({ d, r, i }: { d: GiaThanhCtx; r: PlanCostRow; i: number }) {
               </button>
             ) : null}
             <Link
-              href={`/products/${r.product_id}`}
+              href={`/thu-vien/${r.product_id}`}
               className="truncate font-mono text-xs text-[var(--primary)] hover:underline"
               title={r.name}
             >

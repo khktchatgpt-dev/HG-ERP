@@ -76,7 +76,7 @@ export function KhoiDong({ d }: { d: DonHangCtx }) {
                   </td>
                   <td className={`${TD} min-w-0`}>
                     <Link
-                      href={`/products/${l.product_id}`}
+                      href={`/thu-vien/${l.product_id}`}
                       className="block truncate font-mono text-xs text-[var(--primary)] hover:underline"
                     >
                       {l.product_code}
@@ -231,7 +231,7 @@ function AnhLon({ line, onClose }: { line: DongView; onClose: () => void }) {
           <span className="text-muted-foreground truncate">{line.product_name}</span>
           <span className="flex-1" />
           <Link
-            href={`/products/${line.product_id}`}
+            href={`/thu-vien/${line.product_id}`}
             className="text-xs text-[var(--primary)] hover:underline"
           >
             Hồ sơ SP

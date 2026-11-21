@@ -20,7 +20,6 @@ export function SourceChip({
   refValue,
   pending = false,
   productId,
-  tab = 'thong-so',
   onRestore,
 }: {
   origin: FieldOrigin
@@ -28,6 +27,7 @@ export function SourceChip({
   refValue?: string | null
   pending?: boolean
   productId?: string | null
+  /** Tab hồ sơ cũ — hồ sơ mới gộp một trang, nên chỉ còn để tương thích chỗ gọi. */
   tab?: ProfileTab
   onRestore?: () => void
 }) {
@@ -70,12 +70,8 @@ export function SourceChip({
           <span className="text-muted-foreground">hồ sơ trống — tự nhập</span>
           {productId && (
             <Link
-              // `ho-so` = route gốc của SP, không có đuôi tab.
-              href={
-                tab === 'ho-so'
-                  ? `/products/${productId}`
-                  : `/products/${productId}/${tab}`
-              }
+              // Hồ sơ mới (Thư viện SP) bày thông số + mọi thông tin ngay đầu trang.
+              href={`/thu-vien/${productId}`}
               target="_blank"
               rel="noopener"
               className="text-primary inline-flex items-center gap-0.5 hover:underline"

@@ -102,7 +102,7 @@ export function KhoiChuaMa({ d }: { d: KeHoachCtx }) {
                             <span className="whitespace-nowrap">
                               {pid ? (
                                 <Link
-                                  href={`/products/${pid}/dinh-muc`}
+                                  href={`/thu-vien/${pid}?tab=dinh-muc`}
                                   className={`font-mono ${LINK}`}
                                 >
                                   {p.code}

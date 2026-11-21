@@ -24,7 +24,6 @@ import {
   lineOrigins,
   lineReadiness,
   sheetReadiness,
-  TAB_LABEL,
   type FieldOrigin,
   type LineReadiness,
   type ProfileMap,
@@ -840,28 +839,24 @@ export function LsxSheetEditor({
                                   (() => {
                                     const gaps = snapOf(l)!.gaps
                                     const pushable = pushableGaps(l)
-                                    const tabs = [...new Set(gaps.map((gp) => gp.tab))]
                                     return (
                                       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t pt-2">
                                         <span className="text-muted-foreground text-[11px]">
                                           Hồ sơ SP đang thiếu:{' '}
                                           {gaps.map((gp) => gp.label).join(' · ')}
                                         </span>
-                                        {tabs.map((tab) => (
-                                          <Link
-                                            key={tab}
-                                            href={`/products/${l.product_id}/${tab}`}
-                                            target="_blank"
-                                            rel="noopener"
-                                            className="text-primary inline-flex items-center gap-0.5 text-[11px] hover:underline"
-                                          >
-                                            mở tab {TAB_LABEL[tab]}
-                                            <ExternalLink
-                                              className="size-2.5"
-                                              aria-hidden
-                                            />
-                                          </Link>
-                                        ))}
+                                        <Link
+                                          href={`/thu-vien/${l.product_id}`}
+                                          target="_blank"
+                                          rel="noopener"
+                                          className="text-primary inline-flex items-center gap-0.5 text-[11px] hover:underline"
+                                        >
+                                          mở hồ sơ SP
+                                          <ExternalLink
+                                            className="size-2.5"
+                                            aria-hidden
+                                          />
+                                        </Link>
                                         <Button
                                           variant="outline"
                                           size="sm"

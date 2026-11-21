@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Modal } from '@/components/Modal'
 import { Button } from '@/components/shadcn/button'
-import { IMAGE_FRAME_BG, type ProductRow } from './types'
+const IMAGE_FRAME_BG = 'bg-linear-to-b from-zinc-50 to-zinc-200/70'
 
 /**
  * Xem ảnh lớn ngay trong thư viện — Kinh doanh soi mẫu cho khách mà không phải
@@ -17,9 +17,9 @@ export function ImagePreviewModal({
   preview,
   onClose,
 }: {
-  /** Chỉ cần mấy trường để đặt tên hộp và dẫn về hồ sơ — nhận cả dòng thư viện mới lẫn ProductRow cũ. */
+  /** Chỉ cần mấy trường để đặt tên hộp và dẫn về hồ sơ — dòng thư viện. */
   preview: {
-    product: Pick<ProductRow, 'id' | 'code' | 'name' | 'customer_item_code'>
+    product: { id: string; code: string; name: string; customer_item_code: string | null }
     url: string
   } | null
   onClose: () => void
@@ -50,7 +50,7 @@ export function ImagePreviewModal({
                 ` · KH ${preview.product.customer_item_code}`}
             </span>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/products/${preview.product.id}`}>Mở hồ sơ sản phẩm</Link>
+              <Link href={`/thu-vien/${preview.product.id}`}>Mở hồ sơ sản phẩm</Link>
             </Button>
           </div>
         </div>

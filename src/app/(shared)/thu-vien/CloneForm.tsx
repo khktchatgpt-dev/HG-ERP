@@ -3,7 +3,10 @@
 import { useState } from 'react'
 import { Button } from '@/components/shadcn/button'
 import { Spinner } from '@/components/erp/Spinner'
-import { ACCENT_SOLID, type CustomerNameOption, type Product } from './types'
+import type { Product } from '@/modules/dept/technical/technical.repo'
+
+type CustomerNameOption = { name: string; count: number }
+const ACCENT_SOLID = 'bg-sky-600 text-white hover:bg-sky-700'
 
 /** Nhân bản mẫu (FR-ENG-02) — copy thuộc tính + BOM sang một mã SP mới. */
 export function CloneForm({

@@ -146,7 +146,7 @@ export function BomHealthScreen() {
       header: 'Mã SP',
       width: '150px',
       cell: (r) => (
-        <Link href={`/products/${r.id}/dinh-muc`} className="hover:underline">
+        <Link href={`/thu-vien/${r.id}?tab=dinh-muc`} className="hover:underline">
           <DocChip>{r.code}</DocChip>
         </Link>
       ),

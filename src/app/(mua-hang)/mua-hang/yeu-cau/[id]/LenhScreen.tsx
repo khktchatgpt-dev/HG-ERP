@@ -187,7 +187,7 @@ function SanPham({
                           */
                           <Code
                             as="a"
-                            href={`/products/${p.product_id}`}
+                            href={`/thu-vien/${p.product_id}`}
                             onClick={(e: React.MouseEvent) => e.stopPropagation()}
                           >
                             {p.code}
@@ -241,7 +241,7 @@ function SanPham({
         subtitle={xem?.name}
         footer={
           xem?.product_id ? (
-            <Btn icon="mo" href={`/products/${xem.product_id}`}>
+            <Btn icon="mo" href={`/thu-vien/${xem.product_id}`}>
               Mở hồ sơ sản phẩm
             </Btn>
           ) : (

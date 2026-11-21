@@ -85,7 +85,7 @@ export function KhoiLenhDong({ d }: { d: LenhCtx }) {
                     <td className={`${TD} font-mono text-xs whitespace-nowrap`}>
                       {x.product_id ? (
                         <Link
-                          href={`/products/${x.product_id}`}
+                          href={`/thu-vien/${x.product_id}`}
                           className="text-[var(--primary)] hover:underline"
                         >
                           {x.product_code}

@@ -5,5 +5,5 @@ import { redirect } from 'next/navigation'
  * Giữ redirect để link/bookmark cũ vẫn hoạt động.
  */
 export default function LegacyTechProductsPage() {
-  redirect('/products')
+  redirect('/thu-vien')
 }

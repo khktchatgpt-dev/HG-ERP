@@ -136,7 +136,7 @@ export function TaiLieuSp({ lsxId, rows }: { lsxId: string; rows: TaiLieuRow[] }
                       title="Kỹ thuật chưa nạp file BOM vào hồ sơ SP"
                     >
                       chưa có BOM ·{' '}
-                      <a className="underline" href={`/products/${r.product_id}`}>
+                      <a className="underline" href={`/thu-vien/${r.product_id}`}>
                         hồ sơ SP
                       </a>
                     </span>

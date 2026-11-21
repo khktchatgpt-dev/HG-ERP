@@ -16,7 +16,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
  * Tập SP = ĐÚNG bộ lọc của Thư viện (nút "In thẻ treo" mang nguyên query sang);
  * `?id=` = một SP (in lại thẻ hỏng từ hồ sơ). Gác cửa khu Kỹ thuật nằm ở layout
  * `thu-vien`; đánh dấu "đã treo" cần `technical.product.update` (route kiểm lại).
- * QR trỏ `/products/<id>` — trang hồ sơ dùng chung, phòng nào quét cũng vào được.
+ * QR trỏ `/thu-vien/<id>` — hồ sơ dùng chung, phòng nào quét cũng vào được (thẻ in trước
+ * 20/11/2026 trỏ `/products/<id>`, proxy vẫn chuyển sang).
  */
 export default async function InThePage({
   searchParams,

@@ -33,11 +33,8 @@ describe('chuyển thư viện SP cũ → mới', () => {
     expect(chuyenThuVienCu('/technical/products', '')).toBe('/thu-vien')
   })
 
-  it('?cu=1 giữ trang cũ; đường khác không đụng', () => {
-    expect(chuyenThuVienCu(`/products/${ID}`, '?cu=1')).toBeNull()
-    expect(chuyenThuVienCu(`/technical/products/${ID}`, '?cu=1')).toBe(
-      `/products/${ID}?cu=1`,
-    )
+  it('đường khác không đụng; ?cu=1 cũ không còn giữ trang cũ', () => {
+    expect(chuyenThuVienCu(`/products/${ID}`, '?cu=1')).toBe(`/thu-vien/${ID}`)
     expect(chuyenThuVienCu('/thu-vien', '')).toBeNull()
     expect(chuyenThuVienCu('/productsx', '')).toBeNull()
     expect(chuyenThuVienCu('/api/dept/technical/products/1', '')).toBeNull()
