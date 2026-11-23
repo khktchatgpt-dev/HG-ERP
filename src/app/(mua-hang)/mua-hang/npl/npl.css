@@ -1,0 +1,534 @@
+/*
+ * NPL THEO LỆNH (/mua-hang/npl) — lối ERP KHÔNG kit (docs/erp-khong-kit.md).
+ * Bản vẽ duyệt 20/11/2026: https://claude.ai/artifact/8J3ZmaBWGeFGiutrVCcrgY
+ * Bản 2 (gọn lại, duyệt 21/11/2026): https://claude.ai/artifact/BTz7xg1pDUSuevLAmG3ec7
+ *
+ * Khung sáu tầng: đầu trang · tab ngang có số · thanh lọc · MỘT lưới cuộn (đầu
+ * sẫm dính, chân tổng dính, nhóm theo lệnh) · thanh trạng thái. Chép từ khung
+ * Kho (`warehouse/_erp/kho.css`) — KHÔNG import chéo giữa hai phòng.
+ *
+ * ĐỘ ƯU TIÊN: mọi luật mở đầu `.npl.npl` — layout Mua hàng gắn `.kit`, CSS kit
+ * nằm ngoài @layer nên lớp đơn sẽ thua.
+ */
+.npl.npl {
+  --n-card: #ffffff;
+  --n-raised: #f4f6f9;
+  --n-ink: #12161f;
+  --n-ink2: #3a4252;
+  --n-ink3: #5d6675;
+  --n-empty: #a3abb8;
+  --n-line: #c9d0db;
+  --n-hair: #e3e7ee;
+  --n-zebra: #fafbfc;
+  --n-grp: #eef1f6;
+  --n-act: #1f4bb8;
+  --n-act-wash: #e3eafa;
+  --n-act-text: #173b91;
+  --n-head: #25324a;
+  --n-head2: #33415c;
+  --n-warn: #8a5200;
+  --n-stop: #b0241a;
+  --n-done: #1f6b3d;
+  --n-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--n-card);
+  color: var(--n-ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.npl.npl .mono {
+  font-family: var(--n-mono);
+  font-variant-numeric: tabular-nums;
+}
+.npl.npl .lnk {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--n-act);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.npl.npl :focus-visible {
+  outline: 2px solid var(--n-act);
+  outline-offset: -2px;
+}
+
+/* ── 1 · Đầu trang ── */
+.npl.npl .npl-ph {
+  display: flex;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--n-line);
+  min-height: 44px;
+}
+.npl.npl .npl-ph .crumb {
+  font-size: 12px;
+  color: var(--n-ink3);
+}
+.npl.npl .npl-ph h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.npl.npl .npl-ph .ctx {
+  font-size: 12px;
+  color: var(--n-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.npl.npl .npl-ph .ctx b {
+  font-family: var(--n-mono);
+  color: var(--n-ink);
+  font-weight: 600;
+}
+
+/* ── 2 · Tab ngang có số ── */
+.npl.npl .npl-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  background: var(--n-raised);
+  border-bottom: 1px solid var(--n-line);
+}
+.npl.npl .npl-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-right: 1px solid var(--n-line);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--n-ink2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.npl.npl .npl-tab:hover {
+  background: var(--n-card);
+}
+.npl.npl .npl-tab[aria-selected='true'] {
+  background: var(--n-card);
+  color: var(--n-ink);
+  box-shadow: inset 0 -2px 0 var(--n-act);
+}
+/* Số trên tab là CHỮ (bản 2): bản 1 dùng ô nền đặc đỏ / vàng — nền đặc là thứ
+   bấm được, còn đây chỉ là số đếm. Đỏ chỉ còn ở "N trễ". */
+.npl.npl .npl-tab .c {
+  font-family: var(--n-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--n-ink3);
+}
+.npl.npl .npl-tab[aria-selected='true'] .c {
+  color: var(--n-ink);
+}
+.npl.npl .npl-tab .tre {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--n-stop);
+}
+
+/* ── 3 · Thanh lọc ── */
+.npl.npl .npl-fb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px 14px;
+  border-bottom: 1px solid var(--n-line);
+  font-size: 12.5px;
+  color: var(--n-ink2);
+}
+/* Công tắc Của tôi / Cả phòng (bản 2 · Q1) — vuông, mục đang chọn nền xanh đặc
+   vì nó BẤM được (đổi phạm vi). */
+.npl.npl .npl-fb .seg {
+  display: inline-flex;
+  border: 1px solid var(--n-line);
+}
+.npl.npl .npl-fb .seg button {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  background: var(--n-card);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--n-ink2);
+  cursor: pointer;
+}
+.npl.npl .npl-fb .seg button + button {
+  border-left: 1px solid var(--n-line);
+}
+.npl.npl .npl-fb .seg button[aria-pressed='true'] {
+  background: var(--n-act);
+  color: #fff;
+}
+.npl.npl .npl-fb input[type='search'],
+.npl.npl .npl-fb select {
+  height: 26px;
+  border: 1px solid var(--n-line);
+  border-radius: 0;
+  background: var(--n-card);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--n-ink);
+}
+/* Ô tìm 150 + ô chọn 108: đủ một hàng ở lưới 980px kể cả khi có công tắc phạm
+   vi, ô Phụ trách và "Chỉ dòng trễ" (đo 21/11/2026: 180 + 124 rớt hai hàng). */
+.npl.npl .npl-fb input[type='search'] {
+  width: 150px;
+  max-width: 100%;
+}
+.npl.npl .npl-fb select {
+  max-width: 108px;
+}
+.npl.npl .npl-fb select.on {
+  border-color: var(--n-act);
+  background: var(--n-act-wash);
+  color: var(--n-act);
+  font-weight: 600;
+}
+.npl.npl .npl-fb label.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.npl.npl .npl-fb .sp {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+}
+
+/* ── 5 · Lưới ── */
+.npl.npl .npl-gw {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* Đi Tab tới dòng sâu thì trình duyệt cuộn tới — chừa chỗ cho đầu + chân dính. */
+  scroll-padding-top: 32px;
+  scroll-padding-bottom: 34px;
+}
+.npl.npl table.npl-g {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.npl.npl .npl-g th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--n-head);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  /* `.kit th` (ngoài @layer) ép in hoa + giãn chữ — trả về chữ thường. */
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 6px 8px;
+  white-space: nowrap;
+  border-right: 1px solid var(--n-head2);
+}
+.npl.npl .npl-g th.r {
+  text-align: right;
+}
+.npl.npl .npl-g td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--n-hair);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 27px;
+}
+.npl.npl .npl-g td.r {
+  text-align: right;
+  font-family: var(--n-mono);
+  font-variant-numeric: tabular-nums;
+}
+.npl.npl .npl-g tr.d {
+  cursor: default;
+}
+.npl.npl .npl-g tr.d:nth-child(even) td {
+  background: var(--n-zebra);
+}
+.npl.npl .npl-g tr.d:hover td {
+  background: #f1f4fa;
+}
+.npl.npl .npl-g tr.d.sel td {
+  background: var(--n-act-wash);
+}
+.npl.npl .npl-g tr.d.sel td:first-child {
+  box-shadow: inset 3px 0 0 var(--n-act);
+}
+.npl.npl .npl-g tr.grp td {
+  background: var(--n-grp);
+  border-bottom: 1px solid var(--n-line);
+  font-weight: 600;
+  height: 29px;
+  padding: 0 8px;
+}
+.npl.npl .npl-g tr.grp .tg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 28px;
+  margin-right: 2px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--n-ink3);
+  cursor: pointer;
+}
+/* Mã lệnh dẫn sang trang lệnh (bản 2 · Q5) — thay link "Kế hoạch mua lệnh này"
+   lặp ở mọi đầu nhóm. */
+.npl.npl .npl-g tr.grp a.lsx {
+  font-family: var(--n-mono);
+  font-weight: 700;
+  color: var(--n-act);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.npl.npl .npl-g tr.grp .meta {
+  font-weight: 500;
+  color: var(--n-ink3);
+  margin-left: 10px;
+}
+.npl.npl .npl-g tr.grp .meta b {
+  font-family: var(--n-mono);
+  color: var(--n-ink2);
+  font-weight: 600;
+}
+.npl.npl .npl-g tr.grp .soon {
+  color: var(--n-warn);
+  font-weight: 600;
+}
+.npl.npl .npl-g tr.grp .past {
+  color: var(--n-stop);
+  font-weight: 600;
+}
+.npl.npl .npl-g tr.grp .tre {
+  color: var(--n-stop);
+  font-weight: 600;
+  margin-left: 8px;
+}
+.npl.npl .npl-g a.ma,
+.npl.npl .npl-g a.po {
+  font-family: var(--n-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--n-act);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* Rãnh trái: ▸ chỉ trên dòng chia nhiều lệnh / thuộc đơn gộp (bản 2 · Q4) —
+   thay khung "chia N" từng đẩy tên NPL ra khỏi ô. */
+.npl.npl .npl-g td.gut {
+  padding: 0;
+  text-align: center;
+}
+.npl.npl .npl-g td.gut button {
+  width: 18px;
+  height: 26px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--n-ink3);
+  cursor: pointer;
+}
+.npl.npl .npl-g td.gut button[aria-expanded='true'] {
+  color: var(--n-act);
+}
+.npl.npl .npl-g .hen {
+  font-family: var(--n-mono);
+  font-size: 12.5px;
+}
+/* Hẹn trên đơn nháp / chờ NCC chỉ là dự tính — chữ xám, không báo trễ (Q2). */
+.npl.npl .npl-g .hen.plan {
+  color: var(--n-ink3);
+}
+.npl.npl .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.npl.npl .npl-g .mut {
+  color: var(--n-ink3);
+}
+.npl.npl .npl-g .em {
+  color: var(--n-empty);
+}
+.npl.npl .npl-g .late {
+  color: var(--n-stop);
+  font-weight: 600;
+}
+.npl.npl .st-n {
+  color: var(--n-ink3);
+}
+.npl.npl .st-c {
+  color: var(--n-warn);
+}
+.npl.npl .st-g {
+  color: var(--n-ink2);
+}
+.npl.npl .st-p {
+  color: var(--n-act-text);
+  font-weight: 600;
+}
+.npl.npl .st-d {
+  color: var(--n-done);
+  font-weight: 600;
+}
+.npl.npl .st-x {
+  color: var(--n-stop);
+  font-weight: 600;
+}
+.npl.npl .st-w {
+  color: var(--n-warn);
+  font-weight: 600;
+}
+
+/* Chi tiết dòng chia — mở ngay dưới dòng, không sang trang khác.
+ * `> td`: không có nó thì luật này (đặc hiệu cao hơn `.npl-det td`) đè cả ô của
+ * bảng con bên trong — mỗi ô bảng con lãnh padding trái 36px. */
+.npl.npl .npl-g tr.det > td {
+  background: var(--n-card);
+  height: auto;
+  white-space: normal;
+  padding: 6px 8px 8px 36px;
+  border-bottom: 1px solid var(--n-line);
+  font-size: 12.5px;
+  color: var(--n-ink2);
+}
+.npl.npl .npl-det {
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+.npl.npl .npl-det th,
+.npl.npl .npl-det td {
+  position: static;
+  border: 1px solid var(--n-hair);
+  padding: 3px 8px;
+  height: auto;
+  font-size: 12px;
+  background: var(--n-card);
+  color: var(--n-ink);
+  text-align: left;
+}
+.npl.npl .npl-det th {
+  background: var(--n-raised);
+  color: var(--n-ink2);
+  font-weight: 600;
+}
+.npl.npl .npl-det td.r {
+  text-align: right;
+}
+
+/* Tab Còn phải đặt (bản vẽ 3): chi tiết hai bảng cạnh nhau + phép tính. */
+.npl.npl .npl-g .det-g {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 16px;
+  align-items: start;
+}
+.npl.npl .npl-g .det-h {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--n-ink2);
+  margin-bottom: 3px;
+}
+.npl.npl .npl-g .det-g .npl-det {
+  width: 100%;
+  margin-top: 0;
+}
+.npl.npl .npl-det td.w {
+  white-space: normal;
+}
+.npl.npl .npl-g .calc {
+  margin: 8px 0 0;
+  color: var(--n-ink);
+}
+.npl.npl .npl-g .calc .con {
+  color: var(--n-stop);
+  font-weight: 700;
+}
+.npl.npl .npl-g tr.ks > td {
+  background: var(--n-raised);
+  color: var(--n-ink2);
+}
+.npl.npl .npl-g tr.ks .meta {
+  font-weight: 500;
+  color: var(--n-ink3);
+  margin-left: 12px;
+}
+.npl.npl .npl-g tr.ks-l > td {
+  background: var(--n-card);
+  height: 25px;
+  padding-left: 30px;
+  color: var(--n-ink2);
+}
+.npl.npl .npl-fb .pv {
+  font-size: 12px;
+  color: var(--n-ink3);
+}
+
+.npl.npl .npl-g tr.empty td {
+  height: 44px;
+  white-space: normal;
+  color: var(--n-ink2);
+  padding: 8px 12px;
+}
+.npl.npl .npl-g tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--n-raised);
+  border-top: 1px solid var(--n-line);
+  border-bottom: 0;
+  font-weight: 600;
+  height: 30px;
+}
+.npl.npl .npl-g tfoot .sub {
+  font-weight: 500;
+  color: var(--n-ink3);
+  margin-left: 8px;
+}
+
+/* ── 6 · Thanh trạng thái ── */
+.npl.npl .npl-sb {
+  display: flex;
+  gap: 16px;
+  padding: 4px 14px;
+  border-top: 1px solid var(--n-line);
+  background: var(--n-raised);
+  font-size: 11.5px;
+  color: var(--n-ink3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.npl.npl .npl-sb b {
+  color: var(--n-ink2);
+  font-weight: 600;
+}

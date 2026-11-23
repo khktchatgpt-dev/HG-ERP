@@ -181,9 +181,15 @@ export function tenNganNcc(name: string): string {
   const t = name
     .replace(/^(công ty|cty|doanh nghiệp tư nhân|dntn|cơ sở|hộ kinh doanh)\s+/i, '')
     .replace(/^(tnhh|cổ phần|cp)\s+/i, '')
+    // Đuôi pháp lý tiếng Anh: "KIMPACK PACKAGING JOINT STOCK COMPANY", "… CO., LTD."
+    .replace(/[\s,]+(joint stock company|company limited|co\.?,?\s*ltd\.?|jsc)$/i, '')
     .replace(
-      // "-DV" dính gạch đầu ("TM -DV -TH MINH THẮNG") cũng là phần loại hình.
-      /^(-?(sx|tm|dv|th|xnk|sản xuất|thương mại|dịch vụ|xuất nhập khẩu|và|&|-|,)(\s+|$))+/i,
+      // "-DV" dính gạch đầu ("TM -DV -TH MINH THẮNG") cũng là phần loại hình; gạch
+      // dính liền hai bên ("TM-SX-DV Huy Khánh", "SX-TM PHÚ PHƯƠNG") cũng vậy.
+      // 20/11/2026 (màn NPL theo lệnh): thêm SXTM, MTV, ĐTDV, tổng hợp, xuất khẩu,
+      // tập đoàn — "Cty TNHH SXTM SẢN XUẤT THƯƠNG MẠI TỔNG HỢP MAI TRANG" ra
+      // "SXTM SẢN XUẤ…" trên lưới thay vì "MAI TRANG".
+      /^(-?(sxtm|sx|tm|dv|th|xnk|mtv|đtdv|sản xuất|thương mại|dịch vụ|xuất nhập khẩu|xuất khẩu|tổng hợp|tập đoàn|và|&|-|,)([\s-]+|$))+/i,
       '',
     )
     .trim()

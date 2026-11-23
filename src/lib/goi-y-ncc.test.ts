@@ -111,6 +111,29 @@ describe('tenNganNcc', () => {
     expect(tenNganNcc('CÔNG TY CỔ PHẦN THÉP ASIA')).toBe('THÉP ASIA')
     expect(tenNganNcc('CÔNG TY TNHH TM -DV -TH MINH THẮNG')).toBe('MINH THẮNG')
   })
+  it('SXTM, MTV, tổng hợp, xuất khẩu, tập đoàn, gạch dính liền (20/11/2026)', () => {
+    expect(tenNganNcc('Cty TNHH SXTM SẢN XUẤT THƯƠNG MẠI TỔNG HỢP MAI TRANG')).toBe(
+      'MAI TRANG',
+    )
+    expect(tenNganNcc('Cty TNHH SXTM VĨNH KHANG')).toBe('VĨNH KHANG')
+    expect(tenNganNcc('CÔNG TY TNHH MTV DV TM XNK CAO ĐẠT')).toBe('CAO ĐẠT')
+    expect(tenNganNcc('CÔNG TY TNHH SẢN XUẤT VÀ XUẤT KHẨU DRAGON')).toBe('DRAGON')
+    expect(tenNganNcc('Công ty TNHH thương mại tổng hợp Đắc Vinh')).toBe('Đắc Vinh')
+    expect(tenNganNcc('CÔNG TY TNHH TẬP ĐOÀN NỆM KIM CƯƠNG')).toBe('NỆM KIM CƯƠNG')
+    expect(tenNganNcc('CÔNG TY TNHH TM-SX GIA HUY PHÁT')).toBe('GIA HUY PHÁT')
+    expect(tenNganNcc('Cty TNHH TM-SX-DV Huy Khánh')).toBe('Huy Khánh')
+    expect(tenNganNcc('CÔNG TY CỔ PHẦN SX-TM SƠN NAM VIỆT')).toBe('SƠN NAM VIỆT')
+    expect(tenNganNcc('CÔNG TY TNHH TM - DV THÉP KHU ÔNG MAI')).toBe('THÉP KHU ÔNG MAI')
+    expect(tenNganNcc('KIMPACK PACKAGING JOINT STOCK COMPANY')).toBe('KIMPACK PACKAGING')
+    expect(tenNganNcc('TAIZHOU XU-DAN HOME TECHNOLOGY CO., LTD.')).toBe(
+      'TAIZHOU XU-DAN HOME TECHNOLOGY',
+    )
+    // Tên riêng không có phần loại hình thì giữ nguyên.
+    expect(tenNganNcc('NGŨ KIM THÀNH NGHĨA')).toBe('NGŨ KIM THÀNH NGHĨA')
+    expect(tenNganNcc('Công ty TNHH Kỹ Nghệ Sơn Phủ VIỆT SAPA')).toBe(
+      'Kỹ Nghệ Sơn Phủ VIỆT SAPA',
+    )
+  })
 })
 
 describe('giaTuUngVien / chonMacDinh', () => {
