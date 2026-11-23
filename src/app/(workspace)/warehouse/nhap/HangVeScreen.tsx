@@ -37,10 +37,11 @@ import {
   KhoKhung,
   MenuNut,
   Rong,
+  TabNgang,
   ThanhLoc,
   ThanhTT,
 } from '../_erp/khung'
-import { HangCuaDonSheet } from './hang-cua-don'
+import { donHref } from './theo-lenh/theo-lenh.shared'
 import { BaoSuCoSheet } from './bao-su-co'
 import { LichHangVe } from './lich-hang-ve'
 import { NhomSapDat, lyDoSapDat } from './sap-dat'
@@ -74,10 +75,11 @@ const nhanHref = (r: HangVeRow) =>
  * "Tất cả".
  *
  * K1: không nút trên dòng — chọn đơn rồi bấm Nhận hàng / Xem hàng của đơn / Báo
- * sự cố ở Action Pane; Enter hoặc bấm đúp trên dòng = Nhận hàng. Mã đơn vẫn
- * bấm mở hộp "Hàng của đơn" (?don=).
+ * sự cố ở Action Pane; Enter hoặc bấm đúp trên dòng = Nhận hàng. Bấm mã đơn
+ * sang TRANG ĐƠN `/warehouse/don-mua/[id]` (23/11/2026, thay hộp "Hàng của đơn"
+ * hiện đè lên màn — chủ dự án: đừng gộp một trang).
  *
- * Hai hộp (Hàng của đơn, Báo sự cố) là hộp thoại của Kho (B6).
+ * Hộp Báo sự cố là hộp thoại của Kho (B6).
  *
  * 27/10/2026 — Kho NẮM THÔNG TIN đơn mua, không can thiệp (bản vẽ
  * https://claude.ai/artifact/5iNGTXFgVaL9ZLcNJEEpVp, Q4 + Q6): dải lịch thay
@@ -91,7 +93,6 @@ export function HangVeScreen({
   today,
   canEdit,
   truncatedAt,
-  hangCuaDon,
   suCo,
 }: {
   rows: HangVeRow[]
@@ -101,8 +102,6 @@ export function HangVeScreen({
   /** Ghi phiếu kho được (`warehouse.stock.write`). */
   canEdit: boolean
   truncatedAt: number | null
-  /** Hộp "Hàng của đơn" đang mở (`?don=`). */
-  hangCuaDon: HangCuaDonData | null
   /** Hộp "Báo sự cố giao hàng" đang mở (`?su_co=`). */
   suCo: HangCuaDonData | null
 }) {
@@ -115,13 +114,9 @@ export function HangVeScreen({
     const qs = p.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
-  const moDon = (id: string) => thayUrl((p) => p.set('don', id))
-  const dongDon = () => thayUrl((p) => p.delete('don'))
-  const moSuCo = (id: string) =>
-    thayUrl((p) => {
-      p.delete('don')
-      p.set('su_co', id)
-    })
+  // Trang đơn của Kho (Q8 bản vẽ 69uVsoei…, 23/11/2026) thay hộp "Hàng của đơn".
+  const moDon = (id: string) => router.push(donHref(id))
+  const moSuCo = (id: string) => thayUrl((p) => p.set('su_co', id))
   const dongSuCo = () => thayUrl((p) => p.delete('su_co'))
   /* Phiếu VỪA GHI ở form nhận hàng — mã phiếu qua URL để dải "Đã ghi sổ" (có
      nút In) sống qua lần điều hướng. */
@@ -270,7 +265,7 @@ export function HangVeScreen({
     const n = r.expected_at ? soNgayToi(r.expected_at, today) : null
     const la = ngayBatThuong(r.expected_at, today)
     const tuDo = chiDongTuDo(r)
-    const on = r.po_id === chon || hangCuaDon?.po.id === r.po_id
+    const on = r.po_id === chon
     const tre = !la && n != null && n < 0 ? -n : 0
     return (
       <tr
@@ -319,7 +314,7 @@ export function HangVeScreen({
             type="button"
             className="kh-lnk"
             title={[
-              'Xem hàng của đơn',
+              'Mở trang đơn',
               gon && (poTemplateShort(r.template) ?? r.template),
               hep && r.owner_name && `phụ trách ${r.owner_name}`,
             ]
@@ -444,7 +439,7 @@ export function HangVeScreen({
                   ? []
                   : [
                       {
-                        label: 'Hàng của đơn',
+                        label: 'Xem đơn',
                         onClick: sel || selSap ? () => moDon((sel ?? selSap)!.po_id) : undefined, // prettier-ignore
                         why: sel || selSap ? null : 'Chọn một đơn trong bảng trước',
                       },
@@ -468,6 +463,21 @@ export function HangVeScreen({
             />
           </ApNhom>
         }
+      />
+
+      {/* Tab Theo lệnh (23/11/2026, bản vẽ 69uVsoeKimjmBMCiXD9Tsp Q1): cả đơn đã nhận đủ + phiếu nhập theo từng lệnh. */}
+      <TabNgang
+        label="Cách xem hàng về"
+        tabs={[
+          { key: 'don', label: 'Đơn đang về', on: true, n: rows.length, mau: 'c-nhap' },
+          {
+            key: 'lenh',
+            label: 'Theo lệnh',
+            on: false,
+            href: '/warehouse/nhap/theo-lenh',
+            mau: 'c-nhap',
+          },
+        ]}
       />
 
       {vuaGhi && vuaGhiMa && (
@@ -710,7 +720,7 @@ export function HangVeScreen({
       )}
 
       <ThanhTT
-        left="Enter / bấm đúp = Nhận hàng đơn đang chọn · bấm mã đơn xem hàng của đơn · “Về kho” = dòng đã nhận đủ hoặc đã chốt thiếu / tổng dòng"
+        left="Enter / bấm đúp = Nhận hàng đơn đang chọn · bấm mã đơn mở trang đơn · “Về kho” = dòng đã nhận đủ hoặc đã chốt thiếu / tổng dòng"
         right={
           <b>
             {kept.length} / {rows.length} đơn
@@ -718,20 +728,7 @@ export function HangVeScreen({
         }
       />
 
-      {(hangCuaDon || suCo) && (
-        <>
-          {hangCuaDon && (
-            <HangCuaDonSheet
-              data={hangCuaDon}
-              today={today}
-              canEdit={canEdit}
-              onClose={dongDon}
-              onBaoSuCo={canEdit ? () => moSuCo(hangCuaDon.po.id) : undefined}
-            />
-          )}
-          {suCo && <BaoSuCoSheet data={suCo} onClose={dongSuCo} />}
-        </>
-      )}
+      {suCo && <BaoSuCoSheet data={suCo} onClose={dongSuCo} />}
     </KhoKhung>
   )
 }

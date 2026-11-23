@@ -7,7 +7,9 @@ import { dotKeTiep, type HangVeRow } from '@/lib/kho-hang-ve'
 import type { SapDatRow } from '@/lib/kho-lich-hang-ve'
 import { loadWatchPos, todayIso } from '@/modules/dept/supply/watch-pos'
 import { HangVeScreen } from './HangVeScreen'
+import { redirect } from 'next/navigation'
 import { taiHangCuaDon } from './tai-hang-cua-don'
+import { donHref } from './theo-lenh/theo-lenh.shared'
 
 export const metadata = { title: 'Kho · Nhận hàng' }
 export const dynamic = 'force-dynamic'
@@ -36,23 +38,24 @@ export default async function WarehouseInboundPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    /** Mở hộp "Hàng của đơn" (chỉ xem) — bản vẽ B1-3. */
+    /** Link cũ của hộp "Hàng của đơn" — nay chuyển sang trang đơn. */
     don?: string
     /** Mở hộp "Báo sự cố giao hàng" (Bước 3, bản vẽ B3-2). */
     su_co?: string
   }>
 }) {
   const sp = await searchParams
+  // Link cũ `?don=` (hộp "Hàng của đơn", gỡ 23/11/2026) → trang đơn của Kho.
+  if (sp.don) redirect(donHref(encodeURIComponent(sp.don)))
   const user = await authService.requirePageUser()
   const today = todayIso()
 
-  const [{ rows: all, truncatedAt }, canEdit, hangCuaDon, suCo] = await Promise.all([
+  const [{ rows: all, truncatedAt }, canEdit, suCo] = await Promise.all([
     loadWatchPos(user),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
-    sp.don ? taiHangCuaDon(user, sp.don) : Promise.resolve(null),
-    // Hộp báo sự cố cần đầu đơn + dòng hàng — cùng bộ nạp của hộp Hàng của đơn.
+    // Hộp báo sự cố cần đầu đơn + dòng hàng — cùng bộ nạp của trang đơn.
     sp.su_co ? taiHangCuaDon(user, sp.su_co) : Promise.resolve(null),
   ])
   const incoming = all.filter(isIncoming)
@@ -109,7 +112,6 @@ export default async function WarehouseInboundPage({
       today={today}
       canEdit={canEdit}
       truncatedAt={truncatedAt}
-      hangCuaDon={hangCuaDon}
       suCo={suCo}
     />
   )

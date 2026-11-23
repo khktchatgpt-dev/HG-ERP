@@ -75,7 +75,7 @@ export function NhomSapDat({
               <button
                 type="button"
                 className="kh-lnk"
-                title="Xem hàng của đơn"
+                title="Mở trang đơn"
                 onClick={(e) => {
                   e.stopPropagation()
                   onChon(s.po_id)

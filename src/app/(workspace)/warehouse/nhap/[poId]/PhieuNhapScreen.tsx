@@ -347,7 +347,7 @@ export function PhieuNhapScreen({
               items={[
                 { label: 'Xoá số đã gõ', onClick: xoaSo, why: dangGhi },
                 { label: 'Xem bản in', onClick: () => setXemIn(true) },
-                { label: 'Hàng của đơn', href: `/warehouse/nhap?don=${po.id}`, why: dangGhi }, // prettier-ignore
+                { label: 'Xem đơn', href: `/warehouse/don-mua/${po.id}`, why: dangGhi }, // prettier-ignore
                 { label: 'Về danh sách nhận hàng', href: duong.home, why: dangGhi },
               ]}
             />

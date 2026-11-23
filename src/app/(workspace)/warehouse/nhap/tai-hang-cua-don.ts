@@ -5,9 +5,9 @@ import { HttpError } from '@/server/http'
 import { todayVn } from '@/lib/date-vn'
 
 /**
- * NẠP HỘP "HÀNG CỦA ĐƠN" — mở trên Kho › Hàng về bằng `?don=<id>` (bản vẽ B1-3,
- * duyệt 12/10/2026). Thay cho link sang `/mua-hang/don/[id]`: NV Kho không có
- * quyền vào khu Mua hàng, bấm mã đơn là bị chuyển về trang chủ.
+ * NẠP ĐƠN MUA CHO KHO — trang đơn `/warehouse/don-mua/[id]` (23/11/2026; trước
+ * đó là hộp "Hàng của đơn" `?don=`, bản vẽ B1-3) + hộp Báo sự cố. Thay cho link
+ * sang `/mua-hang/don/[id]`: NV Kho không có quyền vào khu Mua hàng.
  *
  * CHỈ XEM. Không truy vấn mới: đúng ba hàm trang đơn và hộp Giao nhận của Cung
  * ứng dùng (`posService.detail` · `listShipments`), nên "đã về / còn chờ" ở đây

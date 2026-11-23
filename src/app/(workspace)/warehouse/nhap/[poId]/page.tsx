@@ -41,9 +41,9 @@ export default async function Page({
               <Link href="/warehouse/nhap" className="kh-btn">
                 Về danh sách nhận hàng
               </Link>
-              {/* Hộp "Hàng của đơn" trong Kho — NV Kho không vào được khu Mua hàng. */}
-              <Link href={`/warehouse/nhap?don=${r.po.id}`} className="kh-btn p">
-                Xem hàng của đơn {r.po.code}
+              {/* Trang đơn của Kho — NV Kho không vào được khu Mua hàng. */}
+              <Link href={`/warehouse/don-mua/${r.po.id}`} className="kh-btn p">
+                Xem đơn {r.po.code}
               </Link>
             </span>
           }

@@ -217,7 +217,7 @@ describe('đầu trang gọn (K4)', () => {
     expect(pane.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
       'Xoá số đã gõ',
       'Xem bản in',
-      'Hàng của đơn',
+      'Xem đơn',
       'Về danh sách nhận hàng',
     ])
     fireEvent.click(pane.getByRole('menuitem', { name: 'Xem bản in' }))
@@ -233,8 +233,8 @@ describe('đầu trang gọn (K4)', () => {
     // Cửa Cung ứng (fixture gốc): không được nói "Kho › Nhận hàng" mà dẫn sang khu khác.
     dung({ noi: 'cung-ung' })
     expect(screen.queryByRole('link', { name: 'Nhận hàng' })).toBeNull()
-    expect(
-      screen.getByRole('link', { name: 'Theo dõi đơn hàng' }).getAttribute('href'),
-    ).toBe('/mua-hang/theo-doi')
+    expect(screen.getByRole('link', { name: 'Hàng về' }).getAttribute('href')).toBe(
+      '/mua-hang/theo-doi',
+    )
   })
 })

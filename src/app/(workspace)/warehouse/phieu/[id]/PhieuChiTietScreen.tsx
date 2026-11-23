@@ -225,7 +225,7 @@ export function PhieuChiTietScreen({
         </span>
       </O>
       <O k="Đơn">
-        <Link href={`/warehouse/nhap?don=${row.po_id}`} className="kh-lnk">
+        <Link href={`/warehouse/don-mua/${row.po_id}`} className="kh-lnk">
           {row.po_code}
         </Link>
       </O>
