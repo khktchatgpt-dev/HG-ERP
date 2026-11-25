@@ -356,6 +356,16 @@ export function PhieuChiTietScreen({
               >
                 In phiếu
               </ApNut>
+              {doc.kind === 'receipt' && (
+                <ApNut
+                  icon={<Printer size={15} aria-hidden />}
+                  onClick={() =>
+                    window.open(`/print/warehouse/${doc.id}/kiem-tra`, '_blank')
+                  }
+                >
+                  In biên bản kiểm tra
+                </ApNut>
+              )}
               <ApNut icon={<BookOpen size={15} aria-hidden />} href={so.href}>
                 {so.ten}
               </ApNut>

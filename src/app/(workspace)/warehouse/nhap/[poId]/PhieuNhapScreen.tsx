@@ -347,6 +347,12 @@ export function PhieuNhapScreen({
               items={[
                 { label: 'Xoá số đã gõ', onClick: xoaSo, why: dangGhi },
                 { label: 'Xem bản in', onClick: () => setXemIn(true) },
+                // Biên bản kiểm tra đầu vào TRƯỚC ghi sổ (25/11/2026): QC cầm ra xe.
+                {
+                  label: 'In biên bản kiểm tra',
+                  onClick: () =>
+                    window.open(`/print/warehouse/don/${po.id}/kiem-tra`, '_blank'),
+                },
                 { label: 'Xem đơn', href: `/warehouse/don-mua/${po.id}`, why: dangGhi }, // prettier-ignore
                 { label: 'Về danh sách nhận hàng', href: duong.home, why: dangGhi },
               ]}

@@ -205,7 +205,7 @@ describe('lập lại phiếu cũ để sửa (05/10/2026)', () => {
  * hai nút của việc tại phiếu + "Khác ▾"; quay về danh sách bấm chữ "Nhận hàng".
  */
 describe('đầu trang gọn (K4)', () => {
-  it('Action Pane: Nhận đủ tất cả · Báo sự cố · Khác ▾ — bốn việc ít dùng nằm trong Khác', () => {
+  it('Action Pane: Nhận đủ tất cả · Báo sự cố · Khác ▾ — năm việc ít dùng nằm trong Khác', () => {
     dung()
     const pane = within(screen.getByRole('toolbar', { name: 'Thao tác' }))
     expect(pane.getAllByRole('button').map((b) => b.textContent)).toEqual([
@@ -217,6 +217,7 @@ describe('đầu trang gọn (K4)', () => {
     expect(pane.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
       'Xoá số đã gõ',
       'Xem bản in',
+      'In biên bản kiểm tra',
       'Xem đơn',
       'Về danh sách nhận hàng',
     ])
