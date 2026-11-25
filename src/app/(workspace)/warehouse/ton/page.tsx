@@ -17,6 +17,7 @@ import {
 import { TonKhoScreen } from './TonKhoScreen'
 import { TonLenhScreen } from './TonLenhScreen'
 import { RO_TON, type RoTon } from './ro-ton'
+import { phamViCuaToi } from '@/modules/dept/warehouse/phu-trach.service'
 import type { CuaLenh, LenhDong, MaChiTiet } from './ton-lenh.shared'
 
 export const metadata = { title: 'Kho · Tồn kho' }
@@ -101,7 +102,20 @@ export default async function TonKhoPage({
     ? (sp.ro as RoTon)
     : 'has'
   const q = sp.q?.trim() || undefined
-  const nhom = sp.nhom?.trim() || undefined
+  /*
+    NHÓM CỦA TÔI (bước 2 phụ trách nhóm, 24/11/2026): `nhom=toi` = nhóm được gán cho
+    người xem; `nhom=tat-ca` = mọi nhóm; không có tham số → nhân viên đã được gán mở
+    sẵn "của tôi", người khác mở mọi nhóm (Q3). Còn lại = đúng một nhóm như cũ.
+  */
+  const pv = await phamViCuaToi(user)
+  const nhomUrl = sp.nhom?.trim() || ''
+  const nhomHieuLuc = nhomUrl || (pv.macDinh ? 'toi' : '')
+  const nhom =
+    nhomHieuLuc === 'toi'
+      ? (pv.nhom ?? undefined)
+      : nhomHieuLuc && nhomHieuLuc !== 'tat-ca'
+        ? nhomHieuLuc
+        : undefined
   const trang = Math.max(1, Number(sp.trang) || 1)
 
   // Chia tồn cho lệnh chạy SONG SONG với trang tồn; rổ "Tồn chung" chờ nó.
@@ -156,7 +170,9 @@ export default async function TonKhoPage({
       soTrang={Math.max(1, Math.ceil(res.total / PAGE_SIZE))}
       ro={ro}
       q={sp.q ?? ''}
-      nhom={nhom ?? ''}
+      nhom={nhomHieuLuc === 'tat-ca' ? '' : nhomHieuLuc}
+      nhomMacDinh={pv.macDinh ? 'toi' : ''}
+      soNhomToi={pv.nhom ? (pv.nhom.in?.length ?? null) : undefined}
       nhomOptions={taxonomy.groups.map((g) => g.name)}
       laTruong={laTruong}
       canEdit={canEdit}

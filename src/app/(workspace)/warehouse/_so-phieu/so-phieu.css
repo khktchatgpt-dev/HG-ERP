@@ -1,0 +1,127 @@
+/* SỔ PHIẾU THEO KỲ — Phiếu nhập / Phiếu xuất (bản vẽ JG1wTjeF…, 23/11/2026).
+   Lớp gốc dùng chung `.kh.kh` của khu Kho; ở đây chỉ phần riêng của sổ. */
+
+/* Kỳ ‹ Tháng 11/2026 › */
+.kh.kh .sp-ky {
+  display: inline-flex;
+  align-items: stretch;
+  height: 26px;
+  border: 1px solid var(--kh-line);
+  background: var(--kh-card);
+}
+.kh.kh .sp-ky button {
+  min-width: 26px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--kh-ink2);
+  cursor: pointer;
+}
+.kh.kh .sp-ky button:hover {
+  background: #f0f4fc;
+}
+.kh.kh .sp-ky button:disabled {
+  color: var(--kh-empty);
+  cursor: default;
+  background: none;
+}
+.kh.kh .sp-ky button:focus-visible {
+  outline: 2px solid var(--kh-act);
+  outline-offset: -2px;
+}
+.kh.kh .sp-ky b {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-left: 1px solid var(--kh-line);
+  border-right: 1px solid var(--kh-line);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kh.kh .kh-seg .n {
+  margin-left: 5px;
+  font-family: var(--kh-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dòng ngày: dính ngay dưới tiêu đề cột. */
+.kh.kh .kh-tb.kh-tb > tbody > tr.sp-ngay > td {
+  position: sticky;
+  top: var(--sp-th, 27px);
+  z-index: 1;
+  padding: 4px 8px;
+  border-top: 1px solid var(--kh-line);
+  border-bottom: 1px solid var(--kh-line);
+  background: #eef1f6;
+  color: var(--kh-ink2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+}
+.kh.kh .kh-tb.kh-tb > tbody > tr.sp-ngay .m {
+  margin-left: 8px;
+  font-weight: 400;
+  color: var(--kh-ink3);
+}
+
+/* Lý do: chấm màu theo chiều + chữ. */
+.kh.kh .sp-ld {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.kh.kh .sp-ld::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--kh-ink3);
+}
+.kh.kh .sp-ld.n::before {
+  background: var(--kh-nhap);
+}
+.kh.kh .sp-ld.x::before {
+  background: var(--kh-xuat);
+}
+.kh.kh .sp-ld.d::before {
+  background: transparent;
+  border: 1px solid var(--kh-ink3);
+}
+.kh.kh .sp-ld.z {
+  color: var(--kh-ink3);
+}
+.kh.kh .sp-tag {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--kh-line);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--kh-ink3);
+}
+.kh.kh .sp-tag.w {
+  border-color: #e3c58f;
+  background: var(--kh-warn-wash);
+  color: var(--kh-warn);
+}
+.kh.kh .sp-tag.s {
+  color: var(--kh-stop);
+}
+
+/* Phiếu đã bị đảo: gạch ngang, chữ xám, không cộng. */
+.kh.kh .kh-tb.kh-tb > tbody > tr.sp-dao > td {
+  color: var(--kh-ink3);
+}
+.kh.kh .kh-tb.kh-tb > tbody > tr.sp-dao .sp-ma {
+  text-decoration: line-through;
+  color: var(--kh-ink3);
+}
+.kh.kh .sp-ma {
+  font-family: var(--kh-mono);
+  font-weight: 500;
+}
+.kh.kh .sp-po {
+  font-family: var(--kh-mono);
+  font-size: 12px;
+  color: var(--kh-ink2);
+}

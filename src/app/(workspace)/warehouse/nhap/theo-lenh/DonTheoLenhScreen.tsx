@@ -165,9 +165,9 @@ export function DonTheoLenhScreen({
             <ApNhom>
               <ApNut
                 icon={<BookOpen size={15} aria-hidden />}
-                href="/warehouse/phieu?ro=receipt"
+                href="/warehouse/phieu-nhap"
               >
-                Phiếu đã ghi
+                Sổ phiếu nhập
               </ApNut>
             </ApNhom>
           </>

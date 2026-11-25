@@ -4,6 +4,7 @@ import { Fragment } from 'react'
 import { poTemplateShort } from '@/lib/po-template'
 import { tenNccGon } from '@/lib/theo-doi-loc'
 import { ngay } from '@/lib/kho-hang-ve'
+import { nhomGon } from '@/lib/kho-phu-trach'
 import { ngayChoXacNhan, type SapDatRow } from '@/lib/kho-lich-hang-ve'
 
 /** Lý do khoá Nhận hàng khi đang chọn một đơn sắp đặt — nói ai gỡ được. */
@@ -26,6 +27,7 @@ export function NhomSapDat({
   chon,
   onChon,
   onXem,
+  giuTen,
 }: {
   rows: SapDatRow[]
   today: string
@@ -36,6 +38,8 @@ export function NhomSapDat({
   chon: string | null
   onChon: (id: string) => void
   onXem: (id: string) => void
+  /** Cột "Kho giữ" (0305) — có hàm thì thêm một ô cuối dòng. */
+  giuTen?: ((s: SapDatRow) => string) | null
 }) {
   if (rows.length === 0) return null
   return (
@@ -66,7 +70,7 @@ export function NhomSapDat({
                 <span>chưa hẹn</span>
               )}
             </td>
-            {!hep && (
+            {!gon && (
               <td className="r">
                 <span className="kh-empty">·</span>
               </td>
@@ -100,7 +104,13 @@ export function NhomSapDat({
                 </span>
               )}
             </td>
-            {!gon && <td>{poTemplateShort(s.template) ?? s.template}</td>}
+            {!hep && (
+              <td title={(s.nhom_vt ?? []).join(', ') || undefined}>
+                {(s.nhom_vt ?? []).length > 0
+                  ? (s.nhom_vt ?? []).map(nhomGon).join(' · ')
+                  : (poTemplateShort(s.template) ?? s.template)}
+              </td>
+            )}
             {/* Cột Đợt khung < 1100px chỉ 130px: nói gọn, câu đủ ở title + dòng nhóm. */}
             <td
               title={`Chờ NCC xác nhận${s.approved_at ? ` từ khi GĐ duyệt ${ngay(s.approved_at, today)}` : ''}`}
@@ -119,6 +129,7 @@ export function NhomSapDat({
                 {s.owner_name ?? '—'}
               </td>
             )}
+            {giuTen && <td className="kh-mut">{giuTen(s) || '—'}</td>}
           </tr>
         )
       })}

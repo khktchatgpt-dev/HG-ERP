@@ -31,8 +31,8 @@ export default async function WarehouseDocPrintPage({
   const { id } = await params
 
   const doc = await docsRepo.findById(id)
-  // `/warehouse/docs` không còn (sổ phiếu Kho là /warehouse/phieu từ 16/09).
-  if (!doc) redirect('/warehouse/phieu')
+  // Sổ phiếu Kho: /warehouse/phieu-nhap · /warehouse/phieu-xuat (23/11/2026).
+  if (!doc) redirect('/warehouse/phieu-nhap')
   if (doc.kind === 'stocktake') {
     const [stLines, company, tpl] = await Promise.all([
       stocktakeRepo.listByDoc(id),

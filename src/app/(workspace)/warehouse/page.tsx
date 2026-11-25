@@ -13,6 +13,11 @@ import { incomingBucket, isIncoming } from '@/lib/supply-watch'
 import { dotKeTiep } from '@/lib/kho-hang-ve'
 import { roCuaLenh, tomTatLenh } from '@/lib/kho-ton-lenh'
 import { dungDangDo, dungHomNay } from '@/lib/kho-ban-lam-viec'
+import { cheDoMacDinh, khopGiu } from '@/lib/kho-phu-trach'
+import {
+  nguoiGiuTheoDon,
+  phamViCuaToi,
+} from '@/modules/dept/warehouse/phu-trach.service'
 import { thuocRo, TRANG_THAI } from './kiem-ke/kiem-ke.shared'
 import { HomNayScreen, type DongHangVe, type DongLenh } from './HomNayScreen'
 
@@ -35,10 +40,17 @@ const TOI_DA = 3
 export default async function HomNayPage() {
   const user = await authService.requirePageUser()
   const today = todayIso()
+  // Phạm vi "của tôi" (bước 2 phụ trách nhóm) — ô Tồn đếm theo nhóm của người xem.
+  const pv = await phamViCuaToi(user)
   const [watch, lenhAll, ton, thieu, dot, deNghi, truong] = await Promise.all([
     loadWatchPos(user),
     hangLenhService.tatCa(user),
-    stockService.listStockPage(user, { bucket: 'has', page: 1, page_size: 1 }),
+    stockService.listStockPage(user, {
+      bucket: 'has',
+      page: 1,
+      page_size: 1,
+      group_name: pv.macDinh ? (pv.nhom ?? undefined) : undefined,
+    }),
     soPhieuRepo.thieuSoNcc(today),
     stocktakesService.list(user, { page: 1, page_size: 100 }),
     deNghiService.list(user),
@@ -46,8 +58,13 @@ export default async function HomNayPage() {
   ])
 
   // Nhận hàng: cùng tập + mốc với /warehouse/nhap (isIncoming + incomingBucket).
-  const ve = watch.rows
-    .filter(isIncoming)
+  const veAll = watch.rows.filter(isIncoming)
+  // Hàng về "của tôi": cùng `cheDoMacDinh` + `khopGiu` màn Nhận hàng dùng khi mở ra.
+  const giuBy = await nguoiGiuTheoDon(veAll.map((p) => p.id), pv.pc, pv.thuKho)
+  const veCuaToi =
+    cheDoMacDinh(user.id, pv.nguoi, [...giuBy.values()].map((g) => g.giu)) === 'toi'
+  const ve = veAll
+    .filter((p) => !veCuaToi || khopGiu(giuBy.get(p.id)?.giu ?? [], 'toi', user.id))
     .map((p) => ({ p, b: incomingBucket(p, today) }))
   const dem = (b: string) => ve.filter((x) => x.b === b).length
   const gap = ve
@@ -105,6 +122,7 @@ export default async function HomNayPage() {
       cho: dot.rows.filter((t) => thuocRo(t, 'cho')).length,
     },
     deNghi: { viec: deNghi.filter((p) => p.status === 'draft').length },
+    cuaToi: { ve: veCuaToi, ton: pv.macDinh },
   })
 
   const laNhanh = (t: (typeof dot.rows)[number]) =>

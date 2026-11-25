@@ -33,6 +33,10 @@ export type HangVeRow = {
   dot: DotKeTiep | null
   /** Sự cố giao hàng còn mở của đơn (sổ 0213) — nhãn "N sự cố" (Bước 3). */
   su_co_mo: number
+  /** Nhân viên Kho giữ đơn (theo nhóm vật tư của dòng, 0305). */
+  giu?: string[]
+  /** Nhóm vật tư trên dòng của đơn. */
+  nhom_vt?: string[]
 }
 
 /** Một đợt giao còn mở (planned/arrived) cùng các dòng đơn nó chở. */

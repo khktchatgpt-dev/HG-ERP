@@ -247,8 +247,11 @@ export function BaoCaoScreen({ bc }: { bc: NxtBaoCao }) {
               </ApNhom>
             )}
             <ApNhom>
-              <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Phiếu đã ghi
+              <ApNut
+                icon={<BookOpen size={15} aria-hidden />}
+                href="/warehouse/phieu-nhap"
+              >
+                Sổ phiếu nhập
               </ApNut>
             </ApNhom>
             {/* B3 (bản vẽ khung 3 + 6): mở lại và nhật ký là việc hiếm — gom vào Khác ▾. */}

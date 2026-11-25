@@ -261,17 +261,22 @@ export function XuatScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chạy theo mã trên URL, các hàm kia ổn định trong lượt
   }, [maUrl])
 
-  const lamMoi = () => {
+  /**
+   * `giuNgayLui`: sau khi ghi sổ một phiếu GHI LÙI, giữ nguyên ngày cho tờ kế tiếp —
+   * Kho nhập bù cả xấp phiếu xuất viết tay cùng ngày (25/11/2026: từ 03/10 phiếu xuất
+   * dưới xưởng chỉ nằm trên giấy). Nút "Làm mới" vẫn đưa ngày về hôm nay.
+   */
+  const lamMoi = (giuNgayLui = false) => {
     setRows([])
     setTich(new Map())
-    setHead({
+    setHead((h) => ({
       loai: 'lsx',
       lsx_id: '',
       ly_do: '',
       to: '',
       nguoi_lay: '',
-      doc_date: today,
-    })
+      doc_date: giuNgayLui && h.doc_date && h.doc_date !== today ? h.doc_date : today,
+    }))
     setDaThu(false)
     setBao(null)
     setLoiGhi(null)
@@ -317,7 +322,7 @@ export function XuatScreen({
       setVuaGhi({ id: res.id, code: res.code, dong: tong.so_dong, to: head.to })
       setLanSheet(null)
       setLanDraft('')
-      lamMoi()
+      lamMoi(true)
       router.refresh()
     } catch (e) {
       // Lấn phần giữ cho lệnh khác: mở hộp xin lý do, mang NGUYÊN câu server nói.
@@ -362,7 +367,8 @@ export function XuatScreen({
       : daThu && !kiem.ok
         ? kiem.message
         : undefined
-  const trong = rows.length === 0 && !head.to && !head.lsx_id
+  // Ngày đang ghi lùi (giữ lại sau khi nhập bù một tờ) cũng là thứ "Làm mới" xoá được.
+  const trong = rows.length === 0 && !head.to && !head.lsx_id && head.doc_date === today
 
   return (
     <KhoKhung label="Xuất hàng" onKeyDown={phimGhi}>
@@ -374,7 +380,7 @@ export function XuatScreen({
             <ApNhom>
               <ApNut
                 icon={<RotateCcw size={15} aria-hidden />}
-                onClick={lamMoi}
+                onClick={() => lamMoi()}
                 why={busy ? 'Đang ghi sổ…' : trong ? 'Phiếu đang trống' : null}
               >
                 Làm mới
@@ -389,9 +395,9 @@ export function XuatScreen({
             <ApNhom>
               <ApNut
                 icon={<BookOpen size={15} aria-hidden />}
-                href="/warehouse/phieu?ro=issue"
+                href="/warehouse/phieu-xuat"
               >
-                Phiếu xuất đã ghi
+                Sổ phiếu xuất
               </ApNut>
             </ApNhom>
           </>
@@ -403,7 +409,7 @@ export function XuatScreen({
           code={vuaGhi.code}
           docId={vuaGhi.id}
           detail={`${vuaGhi.dong} dòng · ${vuaGhi.to} — tồn đã trừ. Phiếu mới đã sẵn, ghi tiếp cho tổ khác.`}
-          soPhieuHref="/warehouse/phieu?ro=issue"
+          soPhieuHref="/warehouse/phieu-xuat"
           onClose={() => setVuaGhi(null)}
         />
       )}

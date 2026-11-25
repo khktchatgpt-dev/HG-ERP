@@ -183,3 +183,45 @@ describe('TonKhoScreen · cập nhật số thực tế trong khung mã', () => 
     )
   })
 })
+
+/**
+ * NHÓM CỦA TÔI (bước 2 phụ trách nhóm vật tư, 24/11/2026): nhân viên Kho đã được gán
+ * mở là "Nhóm của tôi"; chọn "Mọi nhóm" phải ghi rõ `nhom=tat-ca` (bỏ tham số = mặc định).
+ */
+describe('Tồn kho · nhóm của tôi', () => {
+  const dungToi = () =>
+    render(
+      <TonKhoScreen
+        rows={ROWS}
+        cuaLenh={{}}
+        counts={COUNTS}
+        total={169}
+        trang={1}
+        soTrang={1}
+        ro="has"
+        q=""
+        nhom="toi"
+        nhomOptions={['Bao bì - đóng gói - tem nhãn']}
+        laTruong={false}
+        canEdit
+        nhomMacDinh="toi"
+        soNhomToi={6}
+      />,
+    )
+  const oNhom = () => screen.getByRole('combobox', { name: 'Nhóm vật tư' }) as HTMLSelectElement
+
+  it('mở sẵn "Nhóm của tôi (6 nhóm)", không tính là đang lọc', () => {
+    dungToi()
+    expect(oNhom().value).toBe('toi')
+    expect(oNhom().selectedOptions[0].textContent).toBe('Nhóm của tôi (6 nhóm)')
+    expect(screen.queryByRole('button', { name: 'Bỏ lọc' })).toBeNull()
+  })
+
+  it('chọn "Mọi nhóm" → nhom=tat-ca; chọn lại của tôi → bỏ tham số', () => {
+    dungToi()
+    fireEvent.change(oNhom(), { target: { value: '' } })
+    expect(push).toHaveBeenLastCalledWith('/warehouse/ton?nhom=tat-ca', { scroll: false })
+    fireEvent.change(oNhom(), { target: { value: 'toi' } })
+    expect(push).toHaveBeenLastCalledWith('/warehouse/ton', { scroll: false })
+  })
+})

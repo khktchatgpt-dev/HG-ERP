@@ -11,6 +11,8 @@
  * tốt, không tô đỏ.
  */
 
+import { HREF_THIEU_NCC } from './kho-so-phieu'
+
 export type SoBan = {
   hangVe: { tong: number; overdue: number; today: number; week: number }
   thieuNcc: { tong: number; ganDay: number }
@@ -18,6 +20,11 @@ export type SoBan = {
   ton: { has: number; low: number; short: number }
   kiemKe: { lam: number; cho: number }
   deNghi: { viec: number }
+  /**
+   * Số đang đếm phần CỦA NGƯỜI XEM (phụ trách nhóm vật tư, 0305) — cùng mặc định màn
+   * đích mở ra (Nhận hàng "Của tôi", Tồn kho "Nhóm của tôi"), nên số bấm vào vẫn khớp.
+   */
+  cuaToi?: { ve: boolean; ton: boolean }
 }
 
 export type ToneO = 'stop' | 'warn' | 'b' | 'z'
@@ -53,7 +60,7 @@ export function dungHomNay(s: SoBan): KhoiViec[] {
     {
       key: 'nhan',
       ten: 'Nhận hàng NCC',
-      phu: `${nf(s.hangVe.tong)} đơn đang về`,
+      phu: `${nf(s.hangVe.tong)} đơn ${s.cuaToi?.ve ? 'của bạn ' : ''}đang về`,
       so: [
         so('qua-hen', s.hangVe.overdue, 'quá hẹn chưa về', '/warehouse/nhap?hen=overdue', 'stop'), // prettier-ignore
         so('hom-nay', s.hangVe.today, 'hẹn về hôm nay', '/warehouse/nhap?hen=today', 'warn'), // prettier-ignore
@@ -79,7 +86,7 @@ export function dungHomNay(s: SoBan): KhoiViec[] {
     {
       key: 'tra',
       ten: 'Tra tồn',
-      phu: `${nf(s.ton.has)} mã đang có hàng`,
+      phu: `${nf(s.ton.has)} mã ${s.cuaToi?.ton ? 'nhóm của bạn ' : ''}đang có hàng`,
       so: [
         so('duoi-muc', s.ton.low, 'dưới mức tối thiểu', '/warehouse/ton?ro=low', 'stop'),
         so('thieu-lenh', s.ton.short, 'tồn ít hơn phần của lệnh', '/warehouse/ton?ro=short', 'warn'), // prettier-ignore
@@ -112,7 +119,7 @@ export type ViecDo = { key: string; chu: string; href: string }
  *
  * Khối từng tên "Đang dở của bạn" mà dòng thiếu số NCC đếm phiếu của CẢ KHO
  * (thử 28/10/2026: admin chưa ghi phiếu nào vẫn thấy 14). Giữ số cả kho để khớp
- * tab "Thiếu số phiếu NCC" của Phiếu đã ghi (trang đích), nói rõ "cả kho".
+ * rổ "Thiếu số NCC" của sổ Phiếu nhập (trang đích), nói rõ "cả kho".
  */
 export function dungDangDo(input: {
   laTruong: boolean
@@ -146,7 +153,7 @@ export function dungDangDo(input: {
     out.push({
       key: 'thieu-ncc',
       chu: `${nf(input.thieuNccGanDay)} phiếu nhập 14 ngày qua (cả kho) chưa ghi số phiếu NCC`,
-      href: '/warehouse/phieu?ro=thieu_ncc',
+      href: HREF_THIEU_NCC,
     })
   return out
 }

@@ -10,6 +10,7 @@ import { HangVeScreen } from './HangVeScreen'
 import { redirect } from 'next/navigation'
 import { taiHangCuaDon } from './tai-hang-cua-don'
 import { donHref } from './theo-lenh/theo-lenh.shared'
+import { nguoiGiuTheoDon, taiPhanCong } from '@/modules/dept/warehouse/phu-trach.service'
 
 export const metadata = { title: 'Kho · Nhận hàng' }
 export const dynamic = 'force-dynamic'
@@ -50,23 +51,26 @@ export default async function WarehouseInboundPage({
   const user = await authService.requirePageUser()
   const today = todayIso()
 
-  const [{ rows: all, truncatedAt }, canEdit, suCo] = await Promise.all([
+  const [{ rows: all, truncatedAt }, canEdit, suCo, phan] = await Promise.all([
     loadWatchPos(user),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
     // Hộp báo sự cố cần đầu đơn + dòng hàng — cùng bộ nạp của trang đơn.
     sp.su_co ? taiHangCuaDon(user, sp.su_co) : Promise.resolve(null),
+    // Phụ trách nhóm vật tư (0305, 24/11/2026) — lọc "Của tôi".
+    taiPhanCong(),
   ])
   const incoming = all.filter(isIncoming)
   const ids = incoming.map((p) => p.id)
   // SẮP ĐẶT (27/10/2026): đơn GĐ đã duyệt, NCC chưa xác nhận — Kho chỉ xem (Q4).
   const duyet = all.filter((p) => p.status === 'approved')
-  const [dotBy, lineOpen, extraBy, suCoMo] = await Promise.all([
+  const [dotBy, lineOpen, extraBy, suCoMo, giuBy] = await Promise.all([
     hangVeRepo.dotMoTheoDon(ids),
     hangVeRepo.lineOpenByPoIds(ids),
     supplyRepo.extraLsxCodesByPoIds([...ids, ...duyet.map((p) => p.id)]),
     hangVeRepo.suCoMoTheoDon(ids),
+    nguoiGiuTheoDon([...ids, ...duyet.map((p) => p.id)], phan.pc, phan.thuKho),
   ])
 
   const rows: HangVeRow[] = incoming.map((p) => {
@@ -85,6 +89,8 @@ export default async function WarehouseInboundPage({
       owner_name: p.assignee_name,
       dot: d ? dotKeTiep(d.dots, d.so_dot, lineOpen) : null,
       su_co_mo: suCoMo.get(p.id) ?? 0,
+      giu: giuBy.get(p.id)?.giu ?? [],
+      nhom_vt: giuBy.get(p.id)?.nhom ?? [],
     }
   })
 
@@ -102,6 +108,8 @@ export default async function WarehouseInboundPage({
       lines_total: p.lines_total,
       owner_name: p.assignee_name,
       approved_at: p.approved_at ? p.approved_at.slice(0, 10) : null,
+      giu: giuBy.get(p.id)?.giu ?? [],
+      nhom_vt: giuBy.get(p.id)?.nhom ?? [],
     }
   })
 
@@ -113,6 +121,8 @@ export default async function WarehouseInboundPage({
       canEdit={canEdit}
       truncatedAt={truncatedAt}
       suCo={suCo}
+      nguoiKho={phan.nguoi}
+      meId={user.id}
     />
   )
 }

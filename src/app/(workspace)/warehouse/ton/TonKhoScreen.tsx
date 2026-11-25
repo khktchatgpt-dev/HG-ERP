@@ -68,6 +68,8 @@ export function TonKhoScreen({
   nhomOptions,
   laTruong,
   canEdit,
+  nhomMacDinh = '',
+  soNhomToi,
 }: {
   rows: TonRow[]
   /** Lệnh được chia tồn của từng mã trên trang (cột "Của lệnh"). */
@@ -80,6 +82,10 @@ export function TonKhoScreen({
   q: string
   nhom: string
   nhomOptions: string[]
+  /** 'toi' = mở màn là "Nhóm của tôi" (nhân viên Kho đã được gán, 0305). */
+  nhomMacDinh?: 'toi' | ''
+  /** Có mục "Nhóm của tôi": số nhóm (nhân viên) · null (thủ kho: mọi nhóm chưa giao người khác) · undefined = không có. */
+  soNhomToi?: number | null
   /** Trưởng kho — cập nhật số thực tế trong khung mã đổi tồn ngay. */
   laTruong: boolean
   canEdit: boolean
@@ -117,7 +123,9 @@ export function TonKhoScreen({
     router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
 
-  const dangLoc = ro !== 'has' || qUrl.trim() !== '' || nhom !== ''
+  // "Nhóm của tôi" / "Mọi nhóm" là phạm vi xem, không phải bộ lọc để Bỏ — chỉ một nhóm cụ thể mới là lọc.
+  const locNhom = nhom !== '' && nhom !== 'toi'
+  const dangLoc = ro !== 'has' || qUrl.trim() !== '' || locNhom
   // Một kết quả tìm duy nhất thì chọn sẵn — tra một mã là việc hay gặp nhất.
   const sel =
     rows.find((r) => r.material_id === chon) ?? (rows.length === 1 ? rows[0] : null)
@@ -131,7 +139,7 @@ export function TonKhoScreen({
   const ma = sel ? encodeURIComponent(sel.code) : ''
   const boLoc = () => {
     setQ('')
-    dat({ ro: null, q: null, nhom: null })
+    dat({ ro: null, q: null, ...(locNhom ? { nhom: null } : {}) })
   }
 
   return (
@@ -172,7 +180,8 @@ export function TonKhoScreen({
                 // Nhiều mã một lượt vẫn ở màn riêng; một mã thì ngay khung bên phải.
                 { label: 'Cập nhật nhiều mã', href: '/warehouse/cap-nhat-ton' },
                 { label: 'Lập phiếu xuất', href: '/warehouse/xuat' },
-                { label: 'Phiếu đã ghi', href: '/warehouse/phieu' },
+                { label: 'Sổ phiếu nhập', href: '/warehouse/phieu-nhap' },
+                { label: 'Sổ phiếu xuất', href: '/warehouse/phieu-xuat' },
               ]}
             />
           </ApNhom>
@@ -231,10 +240,19 @@ export function TonKhoScreen({
         <select
           value={nhom}
           className={nhom ? 'on' : undefined}
-          onChange={(e) => dat({ nhom: e.target.value || null })}
+          // Chọn đúng mặc định thì bỏ tham số; "Mọi nhóm" khi mặc định là của tôi phải ghi rõ tat-ca.
+          onChange={(e) => {
+            const v = e.target.value
+            dat({ nhom: v === nhomMacDinh ? null : v || (nhomMacDinh ? 'tat-ca' : null) })
+          }}
           aria-label="Nhóm vật tư"
         >
           <option value="">Mọi nhóm vật tư</option>
+          {soNhomToi !== undefined && (
+            <option value="toi">
+              {soNhomToi === null ? 'Nhóm của tôi (chưa giao người khác)' : `Nhóm của tôi (${soNhomToi} nhóm)`}
+            </option>
+          )}
           {nhomOptions.map((g) => (
             <option key={g} value={g}>
               {g}

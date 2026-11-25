@@ -245,13 +245,13 @@ describe('Kho › Hàng về · lịch 7 ngày + Sắp đặt (chỉ xem)', () =
     expect(within(pane()).getByRole('menuitem', { name: /Báo sự cố/ }).getAttribute('aria-disabled')).toBe('true') // prettier-ignore
   })
 
-  it('cột Phụ trách luôn hiện, tên đủ — cả khung 1.068px (laptop 1280 trừ menu)', () => {
+  it('cột Người mua (Cung ứng) luôn hiện, tên đủ — cả khung 1.068px (laptop 1280 trừ menu)', () => {
     const goc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 1068 }) // prettier-ignore
     try {
       dung()
       const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
-      expect(heads).toContain('Phụ trách')
+      expect(heads).toContain('Người mua')
       expect(heads).not.toContain('Loại hàng')
       expect(within(dongCua('PO-2026-0108')).getByText('Đặng Thị Thanh Nga')).toBeTruthy()
     } finally {
@@ -272,5 +272,103 @@ describe('Kho › Hàng về · sự cố', () => {
     expect(replace).toHaveBeenCalledWith('/warehouse/nhap?su_co=id-PO-2026-0108', {
       scroll: false,
     })
+  })
+})
+
+/**
+ * PHỤ TRÁCH NHÓM VẬT TƯ (B1, bản vẽ 27qPqf6o…, 24/11/2026): nhân viên Kho mở màn
+ * là "Của tôi"; thủ kho mở là "Tất cả" và thấy cột "Kho giữ". Chỉ là bộ lọc.
+ */
+describe('Kho › Hàng về · phụ trách nhóm vật tư', () => {
+  const NGUOI = [
+    { id: 'hao', name: 'Lê Khắc Hào', thu_kho: true },
+    { id: 'ha', name: 'Hà Nguyễn Nữ', thu_kho: false },
+  ]
+  const giu: Record<string, string[]> = {
+    'PO-2026-0108': ['ha'],
+    'PO-2026-0100': ['ha', 'hao'],
+    'PO-2026-0115': ['hao'],
+    'PO-2026-0085': ['hao'],
+    ĐH02HGTĐ: ['hao'],
+  }
+  const rows = ROWS.map((x) => ({ ...x, giu: giu[x.po_code], nhom_vt: ['Bao bì'] }))
+  const seg = () => screen.getByRole('radiogroup', { name: 'Người Kho giữ đơn' })
+
+  it('nhân viên mở là "Của tôi": chỉ đơn có nhóm của mình, đơn hai người hiện ở cả hai', () => {
+    dung({ rows, nguoiKho: NGUOI, meId: 'ha' })
+    tab(/Tất cả/)
+    const toi = within(seg()).getByRole('radio', { name: /Của tôi/ })
+    expect(toi.getAttribute('aria-checked')).toBe('true')
+    expect(toi.textContent).toBe('Của tôi2')
+    expect(screen.queryByRole('button', { name: 'PO-2026-0115' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'PO-2026-0100' })).toBeTruthy()
+    expect(within(seg()).getByRole('radio', { name: /Lê Khắc Hào/ }).textContent).toBe('Lê Khắc Hào4')
+    fireEvent.click(within(seg()).getByRole('radio', { name: /Tất cả/ }))
+    expect(screen.getByRole('button', { name: 'PO-2026-0115' })).toBeTruthy()
+  })
+
+  it('thủ kho mở là "Tất cả", có cột "Kho giữ" ghi tên người', () => {
+    dung({ rows, nguoiKho: NGUOI, meId: 'hao' })
+    tab(/Tất cả/)
+    expect(within(seg()).getByRole('radio', { name: /Tất cả/ }).getAttribute('aria-checked')).toBe('true')
+    const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
+    expect(heads).toContain('Kho giữ')
+    expect(within(dongCua('PO-2026-0100')).getByText('Hà Nguyễn Nữ · Lê Khắc Hào')).toBeTruthy()
+  })
+
+  it('khung 1.068px (laptop 1280): không thêm cột "Kho giữ" — tên người giữ vào tooltip mã đơn', () => {
+    const goc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 1068 }) // prettier-ignore
+    try {
+      dung({ rows, nguoiKho: NGUOI, meId: 'hao' })
+      tab(/Tất cả/)
+      const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
+      expect(heads).not.toContain('Kho giữ')
+      expect(screen.getByRole('button', { name: 'PO-2026-0100' }).getAttribute('title')).toMatch(/Kho giữ: Hà Nguyễn Nữ · Lê Khắc Hào/) // prettier-ignore
+    } finally {
+      if (goc) Object.defineProperty(HTMLElement.prototype, 'clientWidth', goc)
+    }
+  })
+
+  it('ô lịch mở ra chọn theo đơn CỦA TÔI: cả kho có đơn quá hẹn mà của tôi không có → không đứng ở Quá hẹn (25/11)', () => {
+    const chiTuan = ROWS.map((x) => ({ ...x, giu: x.po_code === 'PO-2026-0115' ? ['ha'] : ['hao'] }))
+    dung({ rows: chiTuan, nguoiKho: NGUOI, meId: 'ha' })
+    expect(within(lich()).getByRole('tab', { name: /Quá hẹn/ }).getAttribute('aria-selected')).toBe('false') // prettier-ignore
+    expect(screen.getByRole('button', { name: 'PO-2026-0115' })).toBeTruthy()
+  })
+
+  it('cột Nhóm vật tư bày nhãn gọn, tên đủ ở tooltip (25/11: "không biết loại đơn hàng gì")', () => {
+    const vai = rows.map((x) => ({ ...x, nhom_vt: ['Vải - da - chỉ - phụ liệu may', 'Mút - xốp - nệm - gòn'] }))
+    dung({ rows: vai, nguoiKho: NGUOI, meId: 'hao' })
+    tab(/Tất cả/)
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('Nhóm vật tư')
+    const o = within(dongCua('PO-2026-0108')).getByText('Vải · Mút')
+    expect(o.getAttribute('title')).toBe('Vải - da - chỉ - phụ liệu may, Mút - xốp - nệm - gòn')
+  })
+
+  it('ô lọc Nhóm vật tư: số mỗi nhóm = số đơn có nhóm đó; chọn nhóm chỉ còn đơn có nhóm đó', () => {
+    const nhom: Record<string, string[]> = {
+      'PO-2026-0108': ['Vải - da - chỉ - phụ liệu may', 'Mút - xốp - nệm - gòn'],
+      'PO-2026-0100': ['Mút - xốp - nệm - gòn'],
+    }
+    const ds = rows.map((x) => ({ ...x, nhom_vt: nhom[x.po_code] ?? ['Gỗ - ván - chi tiết gỗ mua ngoài'] })) // prettier-ignore
+    dung({ rows: ds, nguoiKho: NGUOI, meId: 'hao' })
+    tab(/Tất cả/)
+    const o = screen.getByRole('combobox', { name: 'Nhóm vật tư' }) as HTMLSelectElement
+    expect([...o.options].map((x) => x.textContent)).toEqual([
+      'Mọi nhóm vật tư',
+      'Gỗ (3)',
+      'Mút (2)',
+      'Vải (1)',
+    ])
+    fireEvent.change(o, { target: { value: 'Mút - xốp - nệm - gòn' } })
+    expect(screen.getByRole('button', { name: 'PO-2026-0108' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'PO-2026-0100' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'PO-2026-0115' })).toBeNull()
+  })
+
+  it('chưa có ai phụ trách (không truyền người Kho): không có dải lọc, màn như cũ', () => {
+    dung()
+    expect(screen.queryByRole('radiogroup', { name: 'Người Kho giữ đơn' })).toBeNull()
   })
 })

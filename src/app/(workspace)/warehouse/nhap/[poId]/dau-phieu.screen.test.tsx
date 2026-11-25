@@ -233,8 +233,12 @@ describe('đầu trang gọn (K4)', () => {
     // Cửa Cung ứng (fixture gốc): không được nói "Kho › Nhận hàng" mà dẫn sang khu khác.
     dung({ noi: 'cung-ung' })
     expect(screen.queryByRole('link', { name: 'Nhận hàng' })).toBeNull()
-    expect(screen.getByRole('link', { name: 'Hàng về' }).getAttribute('href')).toBe(
-      '/mua-hang/theo-doi',
-    )
+    // Theo ĐƯỜNG DẪN, không theo tên: mục menu Cung ứng đang đổi tên ("Theo dõi đơn
+    // hàng" → "Hàng về"), test không được gắn với một trong hai.
+    const ve = screen
+      .getAllByRole('link')
+      .filter((a) => a.getAttribute('href') === '/mua-hang/theo-doi')
+    expect(ve.length).toBeGreaterThan(0)
+    expect(ve.map((a) => a.textContent)).not.toContain('Nhận hàng')
   })
 })

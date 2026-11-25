@@ -274,7 +274,7 @@ export function PhieuDemScreen({
           <span>
             Duyệt {gioVn(dot.approved_at)} · sinh phiếu{' '}
             <b className="kh-num">{dot.doc_code}</b> ({t.thua.length} N4, {t.thieu.length}{' '}
-            X5). Sai thì đảo phiếu KK ở Phiếu đã ghi, không huỷ đợt.
+            X5). Sai thì mở phiếu KK này và lập phiếu đảo, không huỷ đợt.
           </span>
         </div>
       )}

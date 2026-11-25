@@ -89,14 +89,14 @@ describe('dungDangDo', () => {
       '/warehouse/kiem-ke/d9',
       '/warehouse/kiem-ke/d7',
       '/warehouse/de-nghi',
-      '/warehouse/phieu?ro=thieu_ncc',
+      '/warehouse/phieu-nhap?ky=tat-ca&ro=thieu',
     ])
     expect(
       dungDangDo({ ...base, choDuyet: [], dotLam: [], deNghiNhap: 0, thieuNccGanDay: 0 }),
     ).toEqual([])
   })
 
-  it('dòng thiếu số phiếu NCC nói rõ là của CẢ KHO (số khớp tab Phiếu đã ghi, không phải của riêng người xem)', () => {
+  it('dòng thiếu số phiếu NCC nói rõ là của CẢ KHO (số khớp rổ Thiếu số NCC, không phải của riêng người xem)', () => {
     expect(dungDangDo(base).at(-1)?.chu).toBe(
       '37 phiếu nhập 14 ngày qua (cả kho) chưa ghi số phiếu NCC',
     )
@@ -112,5 +112,23 @@ describe('nhanHen', () => {
     expect(nhanHen('2026-10-19', '2026-10-19')).toEqual({ chu: 'hôm nay', tone: 'warn' })
     expect(nhanHen('2026-10-21', '2026-10-19')).toEqual({ chu: '21/10', tone: 'b' })
     expect(nhanHen(null, '2026-10-19')).toEqual({ chu: 'chưa hẹn', tone: 'z' })
+  })
+})
+
+describe('Hôm nay · phần của tôi (phụ trách nhóm vật tư, 24/11/2026)', () => {
+  it('dòng phụ nói rõ đang đếm phần của người xem', async () => {
+    const { dungHomNay } = await import('./kho-ban-lam-viec')
+    const s = {
+      hangVe: { tong: 16, overdue: 9, today: 0, week: 2 },
+      thieuNcc: { tong: 0, ganDay: 0 },
+      lenh: { con: 0, conMa: 0, han: 0, hanTen: [], xong: 0 },
+      ton: { has: 120, low: 3, short: 1 },
+      kiemKe: { lam: 0, cho: 0 },
+      deNghi: { viec: 0 },
+    }
+    const toi = dungHomNay({ ...s, cuaToi: { ve: true, ton: true } })
+    expect(toi[0].phu).toBe('16 đơn của bạn đang về')
+    expect(toi[2].phu).toBe('120 mã nhóm của bạn đang có hàng')
+    expect(dungHomNay(s)[0].phu).toBe('16 đơn đang về')
   })
 })

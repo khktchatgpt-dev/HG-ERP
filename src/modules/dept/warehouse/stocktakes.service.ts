@@ -22,6 +22,8 @@ import {
 
 /** Phần tổ đã lấy cho một lệnh — lưu ở `scope_ref.xuat_bu[material_id]` (K6). */
 type PhanXuatBu = { lsx_id: string; qty: number }
+import { nguoiGiu } from '@/lib/kho-phu-trach'
+import { taiPhanCong } from './phu-trach.service'
 import {
   bookQtyAt,
   danhSachDemNhom,
@@ -227,6 +229,9 @@ export type NhomMoDot = {
   se_dem: number
   /** Mốc duyệt đợt theo nhóm gần nhất; null = chưa bao giờ kiểm. */
   kiem_cuoi: string | null
+  /** Nhân viên Kho giữ nhóm (0305; nhóm chưa gán = thủ kho) — gợi ý người đếm. */
+  giu: string | null
+  giu_ten: string | null
 }
 
 export type ChuanBiMoDot = {
@@ -243,11 +248,12 @@ export const stocktakesService = {
    */
   async chuanBiMoDot(user: User): Promise<ChuanBiMoDot> {
     await assertRead(user)
-    const [ds, nguoi, dot, lenh] = await Promise.all([
+    const [ds, nguoi, dot, lenh, phan] = await Promise.all([
       danhSachDemNhom(),
       nguoiKho(),
       dotNhomDaDuyet(),
       hangLenhService.tatCa(user),
+      taiPhanCong(),
     ])
     const cuoi = kiemCuoiTheoNhom(dot)
     const con = tomTatLenh(lenh.rows, lenh.lenh).filter((x) => x.con_kho > 0)
@@ -257,6 +263,10 @@ export const stocktakesService = {
         co_ton: n.co_ton,
         se_dem: n.ids.length,
         kiem_cuoi: cuoi.get(n.group_name) ?? null,
+        giu: nguoiGiu(n.group_name, phan.pc, phan.thuKho),
+        giu_ten:
+          phan.nguoi.find((p) => p.id === nguoiGiu(n.group_name, phan.pc, phan.thuKho))
+            ?.name ?? null,
       })),
       nguoi,
       lenhChuaXuat: {

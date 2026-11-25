@@ -2,6 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { stocktakesService } from '@/modules/dept/warehouse/stocktakes.service'
 import { tienDoDem } from '@/modules/dept/warehouse/stocktakes.repo'
+import { soPhieuRepo } from '@/modules/dept/warehouse/so-phieu.repo'
 import { KiemKeScreen } from './KiemKeScreen'
 import { RO_DOT, type DotRow, type RoDot } from './kiem-ke.shared'
 
@@ -22,9 +23,10 @@ export default async function KiemKePage({
 }) {
   const user = await authService.requirePageUser()
   const sp = await searchParams
-  const [ds, canManage] = await Promise.all([
+  const [ds, canManage, phieuNgoaiDot] = await Promise.all([
     stocktakesService.list(user, { page: 1, page_size: 100 }),
     canAction(user, 'warehouse.stock.write'),
+    soPhieuRepo.kiemKeNgoaiDot(),
   ])
   const tienDo = await tienDoDem(ds.rows.map((t) => t.id))
   const rows: DotRow[] = ds.rows.map((t) => {
@@ -60,6 +62,7 @@ export default async function KiemKePage({
       canManage={canManage}
       laAdmin={user.role === 'admin'}
       userId={user.id}
+      phieuNgoaiDot={phieuNgoaiDot}
     />
   )
 }

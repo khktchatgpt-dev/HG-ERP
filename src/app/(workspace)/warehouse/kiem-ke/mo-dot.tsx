@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { api, apiErrorText } from '@/lib/api'
 import { isoToVn, todayVn } from '@/lib/date-vn'
 import type { ChuanBiMoDot } from '@/modules/dept/warehouse/stocktakes.service'
+import { goiYNguoiDem } from '@/lib/kho-phu-trach'
 import { HopThoai } from '../_erp/o-nhap'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
@@ -29,6 +30,8 @@ export function MoDotHop({
   const [loiTai, setLoiTai] = useState<string | null>(null)
   const [chon, setChon] = useState<ReadonlySet<string>>(new Set())
   const [nguoi, setNguoi] = useState('')
+  /** Người mở đợt đã tự chọn người đếm → thôi tự điền theo gợi ý. */
+  const [nguoiTay, setNguoiTay] = useState(false)
   const [mu, setMu] = useState(true)
   const [ghiChu, setGhiChu] = useState('')
   const [busy, setBusy] = useState(false)
@@ -48,13 +51,24 @@ export function MoDotHop({
   const thieu =
     chon.size === 0 ? 'Chọn ít nhất một nhóm vật tư' : !nguoi ? 'Chọn người đếm' : null
 
-  const doi = (g: string) =>
-    setChon((s) => {
-      const n = new Set(s)
-      if (n.has(g)) n.delete(g)
-      else n.add(g)
-      return n
-    })
+  // Người giữ từng nhóm (phụ trách nhóm vật tư, 0305) — gợi ý người đếm (bước 3).
+  const giuNhom = Object.fromEntries((d?.nhom ?? []).map((n) => [n.group_name, n.giu]))
+  const goiY = goiYNguoiDem([...chon], giuNhom)
+  const tenCua = (id: string) =>
+    d?.nguoi.find((u) => u.id === id)?.name ??
+    d?.nhom.find((n) => n.giu === id)?.giu_ten ??
+    '—'
+  const doi = (g: string) => {
+    const n = new Set(chon)
+    if (n.has(g)) n.delete(g)
+    else n.add(g)
+    setChon(n)
+    // Chưa tự chọn người đếm: điền người giữ nếu mọi nhóm đã chọn cùng một người.
+    if (!nguoiTay) {
+      const id = goiYNguoiDem([...n], giuNhom).id
+      setNguoi(id && d?.nguoi.some((u) => u.id === id) ? id : '')
+    }
+  }
 
   async function mo() {
     if (thieu) {
@@ -157,7 +171,10 @@ export function MoDotHop({
                   checked={chon.has(n.group_name)}
                   onChange={() => doi(n.group_name)}
                 />
-                <span>{n.group_name}</span>
+                <span>
+                  {n.group_name}
+                  {n.giu_ten && <span className="kh-mut"> · {n.giu_ten}</span>}
+                </span>
                 <span className="r kh-num">{n.co_ton ? fmt(n.co_ton) : '·'}</span>
                 <span className="r kh-num kh-b">{fmt(n.se_dem)}</span>
                 <span className="r kh-mut">
@@ -178,7 +195,10 @@ export function MoDotHop({
         <select
           className="kh-o"
           value={nguoi}
-          onChange={(e) => setNguoi(e.target.value)}
+          onChange={(e) => {
+            setNguoi(e.target.value)
+            setNguoiTay(true)
+          }}
           aria-label="Người đếm"
         >
           <option value="">— chọn —</option>
@@ -189,6 +209,17 @@ export function MoDotHop({
           ))}
         </select>
       </label>
+      {goiY.nguoi.length > 1 && (
+        <p className="kh-mut" style={{ fontSize: 12, margin: 0 }}>
+          Nhóm đã chọn thuộc {goiY.nguoi.length} người: {goiY.nguoi.map(tenCua).join(' · ')} — chọn
+          người đếm.
+        </p>
+      )}
+      {goiY.id && !nguoiTay && nguoi === goiY.id && (
+        <p className="kh-mut" style={{ fontSize: 12, margin: 0 }}>
+          Gợi ý theo người giữ nhóm — đổi được.
+        </p>
+      )}
       <label className="kk-dong">
         <span className="kk-nhan">Đếm mù</span>
         <span className="kk-chk">

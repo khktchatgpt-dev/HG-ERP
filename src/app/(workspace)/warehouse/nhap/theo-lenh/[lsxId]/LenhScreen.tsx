@@ -54,7 +54,13 @@ export function LenhScreen({
   tab: tabDau,
   today,
   canEdit,
+  giu,
 }: {
+  /**
+   * Kho giữ từng đơn (po_id → tên; `khac` = đơn của người khác khi người xem là nhân
+   * viên Kho đang "của tôi" — chữ nhạt). Không có = chưa có người Kho, bỏ cột.
+   */
+  giu?: Record<string, { ten: string; khac: boolean }>
   lenh: KdLenhTong
   rows: KdDonLenh[]
   tab: LenhTab | null
@@ -321,12 +327,14 @@ export function LenhScreen({
             aria-label={`Đơn ${TAB_TEN[tab]} của lệnh ${lenh.code}`}
           >
             <colgroup>
-              <col style={{ width: 230 }} />
-              <col style={{ width: 200 }} />
-              <col style={{ width: 170 }} />
+              {/* Có cột Kho giữ thì thu Đơn / NCC / Tình trạng — đo 24/11: không thu thì Phiếu nhập còn 88px. */}
+              <col style={{ width: giu ? 200 : 230 }} />
+              <col style={{ width: giu ? 170 : 200 }} />
+              <col style={{ width: giu ? 140 : 170 }} />
               <col style={{ width: 84 }} />
               <col style={{ width: 86 }} />
               <col style={{ width: 80 }} />
+              {giu && <col style={{ width: 120 }} />}
               <col />
             </colgroup>
             <thead>
@@ -339,6 +347,7 @@ export function LenhScreen({
                 </th>
                 <th className="r">Hẹn về</th>
                 <th>Trễ</th>
+                {giu && <th title="Nhân viên Kho giữ nhóm vật tư của đơn">Kho giữ</th>}
                 <th>Phiếu nhập đã ghi</th>
               </tr>
             </thead>
@@ -348,7 +357,7 @@ export function LenhScreen({
                 return (
                   <tr
                     key={r.key}
-                    className={['d', on && 'on', r.tinh === 'huy' && 'kd-huy']
+                    className={['d', on && 'on', r.tinh === 'huy' && 'kd-huy', giu?.[r.po_id]?.khac && 'kd-khac']
                       .filter(Boolean)
                       .join(' ')}
                     tabIndex={0}
@@ -393,6 +402,11 @@ export function LenhScreen({
                     <td>
                       {r.tre ? <span className="kh-stop">{r.tre} ngày</span> : null}
                     </td>
+                    {giu && (
+                      <td className="kh-mut" title={giu[r.po_id]?.ten || undefined}>
+                        {giu[r.po_id]?.ten || '—'}
+                      </td>
+                    )}
                     <td className="kd-pnk">
                       {r.phieu.length === 0 ? (
                         <span className="kh-empty">chưa có phiếu</span>
@@ -424,7 +438,7 @@ export function LenhScreen({
                   {ds.reduce((s, r) => s + r.dong_du, 0)}/
                   {ds.reduce((s, r) => s + r.dong_tong, 0)}
                 </td>
-                <td colSpan={3} />
+                <td colSpan={giu ? 4 : 3} />
               </tr>
             </tfoot>
           </table>

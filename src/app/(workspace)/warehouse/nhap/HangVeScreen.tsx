@@ -48,6 +48,8 @@ import { NhomSapDat, lyDoSapDat } from './sap-dat'
 import { DotCell } from './o-dot'
 import { DsDienThoai } from './ds-dien'
 import type { HangCuaDonData } from './tai-hang-cua-don'
+import { cheDoMacDinh, khopGiu, nhomGon, type CheDoGiu, type NguoiKho } from '@/lib/kho-phu-trach'
+import { LocGiu, tenGiu } from './loc-giu'
 
 type Gom = 'moc' | 'lsx' | 'ncc'
 const GOM_LABEL: Record<Gom, string> = { moc: 'Mốc hẹn', lsx: 'Lệnh SX', ncc: 'Nhà cung cấp' } // prettier-ignore
@@ -94,6 +96,8 @@ export function HangVeScreen({
   canEdit,
   truncatedAt,
   suCo,
+  nguoiKho = [],
+  meId = '',
 }: {
   rows: HangVeRow[]
   /** Đơn GĐ đã duyệt, NCC chưa xác nhận — chỉ xem, không vào số đang về. */
@@ -104,6 +108,9 @@ export function HangVeScreen({
   truncatedAt: number | null
   /** Hộp "Báo sự cố giao hàng" đang mở (`?su_co=`). */
   suCo: HangCuaDonData | null
+  /** Nhân viên Kho + thủ kho — lọc "Của tôi" theo nhóm vật tư (0305). */
+  nguoiKho?: NguoiKho[]
+  meId?: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -131,16 +138,25 @@ export function HangVeScreen({
 
   const [q, setQ] = useState('')
   // `?hen=` từ trang Hôm nay / thông báo hàng sắp về mở thẳng đúng ô của dải lịch.
-  const henUrl = docHen(params.get('hen'))
-  const [hen, setHen] = useState<OLichKey>(() =>
-    henUrl && [...rows, ...sapDat].some((r) => khopO(henUrl, r))
-      ? henUrl
-      : rows.some((r) => r.bucket === 'overdue')
-        ? 'overdue'
-        : rows.some((r) => r.bucket === 'today')
-          ? 'today'
-          : 'tat_ca',
+  // Q3: nhân viên Kho có đơn của mình mở là "Của tôi"; thủ kho / người ngoài Kho là "Tất cả".
+  const [cheDo, setCheDo] = useState<CheDoGiu>(() =>
+    cheDoMacDinh(meId, nguoiKho, rows.map((r) => r.giu ?? [])),
   )
+  // Ô lịch mở ra chọn theo đơn ĐANG THẤY (đã lọc người): 25/11 chị Nữ mở màn đứng ở
+  // "Quá hẹn" vì cả kho có đơn quá hẹn, trong khi 2 đơn của chị ở T2 30/11 → bảng trống.
+  const henUrl = docHen(params.get('hen'))
+  const [hen, setHen] = useState<OLichKey>(() => {
+    const thay = <T extends HangVeRow | SapDatRow>(ds: T[]) =>
+      ds.filter((r) => khopGiu(r.giu ?? [], cheDo, meId))
+    const ve = thay(rows)
+    return henUrl && [...ve, ...thay(sapDat)].some((r) => khopO(henUrl, r))
+      ? henUrl
+      : ve.some((r) => r.bucket === 'overdue')
+        ? 'overdue'
+        : ve.some((r) => r.bucket === 'today')
+          ? 'today'
+          : 'tat_ca'
+  })
   const [lsx, setLsx] = useState<string>(MOI)
   const [ncc, setNcc] = useState('')
   const [loai, setLoai] = useState<string>(MOI)
@@ -150,18 +166,25 @@ export function HangVeScreen({
   /* Bộ cột theo bề rộng KHUNG: < 1100 bỏ Loại hàng + Phụ trách (còn ở tooltip
      mã đơn); < 900 gộp Trễ vào Hẹn, Lệnh xuống dòng hai của NCC. */
   const khung = useRef<HTMLDivElement>(null)
-  const beRong = useBeRong(khung)
-  const gon = beRong > 0 && beRong < 1100
+  // Giả định đầu 1400 (rộng): lần vẽ đầu bày đủ cột rồi co lại theo khung thật.
+  const beRong = useBeRong(khung, 1400)
+  /* 25/11/2026 (chủ dự án: "nhìn vào không biết loại đơn hàng gì"): cột NHÓM VẬT TƯ
+     thay "Loại hàng" và luôn hiện từ 900px. Để có chỗ, khung < 1300 gộp Trễ vào Hẹn
+     giao (như < 900), thu Lệnh SX / Người mua / Đợt; "Kho giữ" chỉ khi ≥ 1300. */
+  const gon = beRong > 0 && beRong < 1300
   const hep = beRong > 0 && beRong < 900
   /** Điện thoại: danh sách phẳng thay lưới. */
   const dien = beRong > 0 && beRong < 600
 
   // Một hàm khớp, bỏ được MỘT trục — số trong từng ô chọn đếm trên tập đã lọc các trục khác.
   // Đơn đang về VÀ đơn sắp đặt đi qua cùng một bộ lọc.
-  const khop = (r: HangVeRow | SapDatRow, bo?: 'hen' | 'lsx' | 'ncc' | 'loai') => {
+  const khop = (r: HangVeRow | SapDatRow, bo?: 'hen' | 'lsx' | 'ncc' | 'loai' | 'giu') => {
+    if (bo !== 'giu' && !khopGiu(r.giu ?? [], cheDo, meId)) return false
     if (bo !== 'lsx' && !khopLenh(r.lsx_code, lsx)) return false
     if (bo !== 'ncc' && ncc && r.supplier_name !== ncc) return false
-    if (bo !== 'loai' && loai !== MOI && r.template !== loai) return false
+    // Lọc theo NHÓM VẬT TƯ của dòng (25/11/2026) — cùng nguồn với cột Nhóm vật tư; trước
+    // đó lọc theo mẫu đơn mua (Mút xốp, Carton, Gia công…), hai cách gọi một thứ.
+    if (bo !== 'loai' && loai !== MOI && !(r.nhom_vt ?? []).includes(loai)) return false
     if (bo !== 'hen' && !khopO(hen, r)) return false
     return searchMatcher(q)([r.po_code, r.supplier_name, r.lsx_code, ...r.extra_lsx])
   }
@@ -189,7 +212,13 @@ export function HangVeScreen({
   const lenh = demTheo(rows.filter((r) => khop(r, 'lsx')), (r) => r.lsx_code) // prettier-ignore
   const ngoaiLenh = rows.filter((r) => khop(r, 'lsx') && r.lsx_code == null).length
   const nccs = demTheo(rows.filter((r) => khop(r, 'ncc')), (r) => r.supplier_name) // prettier-ignore
-  const loais = demTheo(rows.filter((r) => khop(r, 'loai')), (r) => r.template) // prettier-ignore
+  // Đơn nhiều nhóm đếm ở mỗi nhóm của nó — đúng số dòng thấy khi chọn nhóm đó.
+  const loais = (() => {
+    const m = new Map<string, number>()
+    for (const r of rows.filter((x) => khop(x, 'loai')))
+      for (const g of r.nhom_vt ?? []) m.set(g, (m.get(g) ?? 0) + 1)
+    return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'vi'))
+  })()
   const dangLoc = !!q.trim() || lsx !== MOI || !!ncc || loai !== MOI
   const boLoc = () => {
     setQ('')
@@ -234,7 +263,11 @@ export function HangVeScreen({
   // Đúng MỘT lệnh đang lọc thì cột Lệnh SX lặp một giá trị — ẩn.
   const hienLenh = !hep && (lsx === MOI || lsx === NGOAI_LENH)
   // Hẹn · Trễ · Đơn · Lệnh · NCC · Loại · Đợt · Về kho · Phụ trách (< 900px: xuống dòng NCC).
-  const soCot = 4 + (hep ? 0 : 2) + (hienLenh ? 1 : 0) + (gon ? 0 : 1)
+  // Cột "Kho giữ" chỉ khi không lọc theo đúng một người (ở "Của tôi" cột lặp một tên) VÀ
+  // khung ≥ 1.100px: đo 24/11 khung 981px thêm cột thì NCC còn 27px. Hẹp hơn → tooltip mã đơn.
+  const hienGiu = !gon && nguoiKho.length > 0 && cheDo === 'tat_ca'
+  // Hẹn · Đơn · NCC · Đợt · Về kho luôn có; Trễ (≥ 1300) · Lệnh · Nhóm + Người mua (≥ 900) · Kho giữ.
+  const soCot = 5 + (gon ? 0 : 1) + (hienLenh ? 1 : 0) + (hep ? 0 : 2) + (hienGiu ? 1 : 0)
   const soGo = kept.filter(chiDongTuDo).length
   const choNhan = kept.reduce((s, r) => s + Math.max(0, r.lines_total - r.lines_done), 0)
 
@@ -281,7 +314,7 @@ export function HangVeScreen({
           {r.expected_at ? (
             <>
               <span className={tre ? 'kh-stop' : undefined}>
-                {la && hep ? '' : ngay(r.expected_at, today)}
+                {la && gon ? '' : ngay(r.expected_at, today)}
               </span>
               {la && (
                 <span
@@ -292,13 +325,13 @@ export function HangVeScreen({
                   ngày lạ
                 </span>
               )}
-              {hep && tre > 0 && <span className="kh-stop"> −{tre}</span>}
+              {gon && tre > 0 && <span className="kh-stop"> −{tre}</span>}
             </>
           ) : (
             <span className="kh-warn">chưa hẹn</span>
           )}
         </td>
-        {!hep && (
+        {!gon && (
           <td className="r kh-num">
             {tre > 0 ? (
               <span className="kh-stop">{tre} ngày</span>
@@ -317,6 +350,7 @@ export function HangVeScreen({
               'Mở trang đơn',
               gon && (poTemplateShort(r.template) ?? r.template),
               hep && r.owner_name && `phụ trách ${r.owner_name}`,
+              !hienGiu && nguoiKho.length > 0 && tenGiu(r.giu, nguoiKho) && `Kho giữ: ${tenGiu(r.giu, nguoiKho)}`,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -357,7 +391,15 @@ export function HangVeScreen({
             </span>
           )}
         </td>
-        {!gon && <td className="kh-mut">{poTemplateShort(r.template) ?? r.template}</td>}
+        {!hep && (
+          <td title={(r.nhom_vt ?? []).join(', ') || undefined}>
+            {(r.nhom_vt ?? []).length > 0 ? (
+              (r.nhom_vt ?? []).map(nhomGon).join(' · ')
+            ) : (
+              <span className="kh-mut">{poTemplateShort(r.template) ?? r.template}</span>
+            )}
+          </td>
+        )}
         <td>
           <DotCell r={r} today={today} hep={gon} />
         </td>
@@ -371,7 +413,7 @@ export function HangVeScreen({
             </span>
           ) : (
             <>
-              {!hep && (
+              {!gon && (
                 <span className="kh-bar" aria-hidden>
                   <i
                     style={{
@@ -391,6 +433,11 @@ export function HangVeScreen({
             {r.owner_name ?? '—'}
           </td>
         )}
+        {hienGiu && (
+          <td className="kh-mut" title={(r.nhom_vt ?? []).join(', ') || undefined}>
+            {tenGiu(r.giu, nguoiKho) || '—'}
+          </td>
+        )}
       </tr>
     )
   }
@@ -401,6 +448,11 @@ export function HangVeScreen({
         title="Nhận hàng"
         ctx={
           <>
+            {cheDo === 'toi' ? (
+              <>
+                <b>{rows.filter((r) => khopGiu(r.giu ?? [], 'toi', meId)).length}</b> đơn của bạn /{' '}
+              </>
+            ) : null}
             <b>{rows.length}</b> đơn đang về
             {sapDat.length > 0 && (
               <>
@@ -458,7 +510,7 @@ export function HangVeScreen({
                 // Hàng về KHÔNG có đơn (N2): có đơn thì vẫn nhận theo đơn.
                 { label: 'Nhận không theo đơn', href: '/warehouse/nhap/ngoai-don' },
                 { label: 'Hoàn kho từ sản xuất', href: '/warehouse/nhap/hoan-kho' },
-                { label: 'Phiếu đã ghi', href: '/warehouse/phieu' },
+                { label: 'Sổ phiếu nhập', href: '/warehouse/phieu-nhap' },
               ]}
             />
           </ApNhom>
@@ -485,7 +537,7 @@ export function HangVeScreen({
           code={vuaGhiMa}
           docId={vuaGhi}
           detail={`${params.get('chi_tiet') ?? 'đã vào sổ'} — tồn đã cộng.`}
-          soPhieuHref="/warehouse/phieu?ro=receipt"
+          soPhieuHref="/warehouse/phieu-nhap"
           onClose={dongVuaGhi}
         />
       )}
@@ -510,6 +562,13 @@ export function HangVeScreen({
       />
 
       <ThanhLoc>
+        <LocGiu
+          giuCuaDon={rows.filter((r) => khop(r, 'giu')).map((r) => r.giu ?? [])}
+          nguoi={nguoiKho}
+          meId={meId}
+          cheDo={cheDo}
+          onDoi={setCheDo}
+        />
         <input
           type="search"
           value={q}
@@ -553,12 +612,12 @@ export function HangVeScreen({
           value={loai}
           className={loai !== MOI ? 'on' : undefined}
           onChange={(e) => setLoai(e.target.value)}
-          aria-label="Loại hàng"
+          aria-label="Nhóm vật tư"
         >
-          <option value={MOI}>Mọi loại hàng</option>
-          {loais.map(([t, n]) => (
-            <option key={t} value={t}>
-              {poTemplateShort(t) ?? t} ({n})
+          <option value={MOI}>Mọi nhóm vật tư</option>
+          {loais.map(([g, n]) => (
+            <option key={g} value={g} title={g}>
+              {nhomGon(g)} ({n})
             </option>
           ))}
         </select>
@@ -647,27 +706,29 @@ export function HangVeScreen({
         <div className="kh-grid">
           <table className="kh-tb" aria-label="Đơn đang về">
             <colgroup>
-              <col style={{ width: hep ? 92 : 78 }} />
-              {!hep && <col style={{ width: 72 }} />}
+              <col style={{ width: gon ? 92 : 78 }} />
+              {!gon && <col style={{ width: 72 }} />}
               <col style={{ width: 124 }} />
-              {hienLenh && <col style={{ width: 158 }} />}
+              {hienLenh && <col style={{ width: gon ? 166 : 158 }} />}
               <col />
-              {!gon && <col style={{ width: 96 }} />}
+              {!hep && <col style={{ width: gon ? 120 : 140 }} />}
               <col style={{ width: gon ? 130 : 204 }} />
-              <col style={{ width: hep ? 64 : 112 }} />
+              <col style={{ width: gon ? 64 : 112 }} />
               {!hep && <col style={{ width: 150 }} />}
+              {hienGiu && <col style={{ width: 130 }} />}
             </colgroup>
             <thead>
               <tr>
                 <th>Hẹn giao</th>
-                {!hep && <th className="r">Trễ</th>}
+                {!gon && <th className="r">Trễ</th>}
                 <th>Đơn</th>
                 {hienLenh && <th>Lệnh SX</th>}
                 <th>Nhà cung cấp</th>
-                {!gon && <th>Loại hàng</th>}
+                {!hep && <th title="Nhóm vật tư trên các dòng của đơn">Nhóm vật tư</th>}
                 <th>{gon ? 'Đợt' : 'Đợt · xe tới'}</th>
                 <th>Về kho</th>
-                {!hep && <th>Phụ trách</th>}
+                {!hep && <th title="Người mua bên Cung ứng">Người mua</th>}
+                {hienGiu && <th title="Nhân viên Kho giữ nhóm vật tư của đơn">Kho giữ</th>}
               </tr>
             </thead>
             <tbody>
@@ -702,6 +763,7 @@ export function HangVeScreen({
                 chon={chon}
                 onChon={setChon}
                 onXem={moDon}
+                giuTen={hienGiu ? (s) => tenGiu(s.giu, nguoiKho) : null}
               />
             </tbody>
             <tfoot>

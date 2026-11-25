@@ -511,6 +511,15 @@ export const ACTIONS: Action[] = [
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
   {
+    // 0305 — PHỤ TRÁCH NHÓM VẬT TƯ (24/11/2026, chủ dự án: "thủ kho phân bổ").
+    // Thủ kho = thành viên Kho có vai `manager`; nhân viên Kho chỉ xem. Không cần
+    // seed quyền mới: anh Hào (wh1) đã là manager + warehouse.member.
+    key: 'warehouse.keeper.manage',
+    label: 'Phân nhóm vật tư cho nhân viên Kho',
+    domain: 'warehouse',
+    rule: anyOf(role('admin'), allOf(perm('warehouse.member'), role('manager'))),
+  },
+  {
     // 0297 — chốt kỳ sổ kho (B2, Q2 duyệt 13/11/2026): Kế toán trưởng (vai
     // `chief_accountant`). Ai vào khu Kho cũng XEM được danh sách kiểm (B1); chỉ
     // người có quyền này thấy ô tích + nút Chốt.

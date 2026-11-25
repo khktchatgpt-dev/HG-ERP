@@ -3,7 +3,8 @@
 import './kiem-ke.css'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, ClipboardCheck, ListChecks, XCircle } from 'lucide-react'
+import Link from 'next/link'
+import { ClipboardCheck, ListChecks, XCircle } from 'lucide-react'
 import { isoToVn, todayVn } from '@/lib/date-vn'
 import { useBeRong } from '@/lib/use-be-rong'
 import {
@@ -56,7 +57,10 @@ export function KiemKeScreen({
   canManage,
   laAdmin,
   userId,
+  phieuNgoaiDot = [],
 }: {
+  /** Phiếu KK không thuộc đợt nào (`soPhieuRepo.kiemKeNgoaiDot`). */
+  phieuNgoaiDot?: { id: string; code: string; doc_date: string; note: string | null }[]
   rows: DotRow[]
   roUrl: RoDot | null
   canManage: boolean
@@ -88,7 +92,7 @@ export function KiemKeScreen({
     ? 'Chọn một đợt trong bảng trước'
     : !huyDuoc(sel.status)
       ? sel.status === 'approved'
-        ? 'Đợt đã duyệt — sai thì đảo phiếu KK ở Phiếu đã ghi, không huỷ đợt'
+        ? 'Đợt đã duyệt — sai thì mở phiếu KK của đợt và lập phiếu đảo, không huỷ đợt'
         : 'Đợt đã huỷ'
       : !laAdmin && sel.created_by !== userId
         ? 'Chỉ người mở đợt hoặc quản trị viên huỷ được'
@@ -147,9 +151,6 @@ export function KiemKeScreen({
               >
                 {sel?.status === 'counting' ? 'Đếm tiếp' : 'Mở phiếu đếm'}
               </ApNut>
-              <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Phiếu đã ghi
-              </ApNut>
             </ApNhom>
           </>
         }
@@ -167,6 +168,29 @@ export function KiemKeScreen({
           mau: RO_MAU[x].mau,
         }))}
       />
+
+      {/* Q4 sổ phiếu (23/11/2026): phiếu KK ghi NGOÀI đợt (nạp nền 09–10/2026) nằm ở đây, không ở sổ nhập / xuất. */}
+      {phieuNgoaiDot.length > 0 && (
+        <div className="kh-note">
+          <span className="tag">Ngoài đợt</span>
+          <span>
+            {fmt(phieuNgoaiDot.length)} phiếu kiểm kê ghi trước khi có đợt:{' '}
+            {phieuNgoaiDot.map((p, i) => (
+              <span key={p.id}>
+                {i > 0 && ' · '}
+                <Link
+                  href={`/warehouse/phieu/${p.id}`}
+                  className="kh-lnk kh-num"
+                  title={p.note ?? undefined}
+                >
+                  {p.code}
+                </Link>{' '}
+                <span className="kh-mut">{isoToVn(p.doc_date).slice(0, 5)}</span>
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
 
       {bao && (
         <div className="kh-note ok" role="status">

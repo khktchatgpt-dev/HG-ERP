@@ -21,6 +21,11 @@ import { demLenhChoSoatKhongCho } from '@/modules/dept/supply/lenh-doi.service'
 import { poReviewService } from '@/modules/dept/supply/po-review.service'
 import { tasksService } from '@/modules/workflow/tasks/tasks.service'
 import type { User } from '@/modules/core/users/users.repo'
+import { cheDoMacDinh, khopGiu } from '@/lib/kho-phu-trach'
+import {
+  nguoiGiuTheoDon,
+  phamViCuaToi,
+} from '@/modules/dept/warehouse/phu-trach.service'
 import type { NavBadge, WorkspaceId } from './workspaces.config'
 
 /**
@@ -50,7 +55,7 @@ async function khuBadges(
 ): Promise<Record<string, number>> {
   if (workspaceId === 'exec') return await execBadges(user)
   if (workspaceId === 'planning') return await supplyBadges(user)
-  if (workspaceId === 'warehouse') return await warehouseBadges()
+  if (workspaceId === 'warehouse') return await warehouseBadges(user)
   if (workspaceId === 'production' || workspaceId === 'thongke')
     return await productionBadges(user)
   return {}
@@ -113,8 +118,12 @@ async function productionBadges(user: User): Promise<Record<string, number>> {
  * Đếm bằng `incomingBucket` — đúng hàm trang `/warehouse/nhap` dùng để xếp mốc
  * và đếm ô "Quá hẹn"/"Hôm nay", cũng là hàm badge Theo dõi của Cung ứng. Kho xem
  * CẢ PHÒNG nên không lọc theo người phụ trách (khác badge bên Cung ứng).
+ *
+ * 24/11/2026 (phụ trách nhóm vật tư, 0305): nhân viên Kho mở Nhận hàng là "Của tôi"
+ * (`cheDoMacDinh`) thì số menu cũng chỉ đếm đơn của họ — cùng `khopGiu`, nên bấm vào
+ * thấy đúng số đó. Thủ kho / người ngoài Kho vẫn đếm cả kho.
  */
-async function warehouseBadges(): Promise<Record<string, number>> {
+async function warehouseBadges(user: User): Promise<Record<string, number>> {
   const today = todayVn()
   const [rows, thieu] = await Promise.all([
     posRepo.listWatchFields(),
@@ -122,13 +131,20 @@ async function warehouseBadges(): Promise<Record<string, number>> {
     // số ô "… trong 14 ngày" trên đầu Sổ phiếu (cùng `thieuSoNcc`, Bước 2b).
     soPhieuRepo.thieuSoNcc(today),
   ])
-  const ganVe = rows.filter((p) => {
+  const dangVe = rows.filter((p) => incomingBucket(p, today) != null)
+  const pv = await phamViCuaToi(user)
+  const giuBy = await nguoiGiuTheoDon(dangVe.map((p) => p.id), pv.pc, pv.thuKho)
+  const cheDo = cheDoMacDinh(user.id, pv.nguoi, [...giuBy.values()].map((g) => g.giu))
+  const ganVe = dangVe.filter((p) => {
     const b = incomingBucket(p, today)
-    return b === 'overdue' || b === 'today'
+    return (
+      (b === 'overdue' || b === 'today') &&
+      khopGiu(giuBy.get(p.id)?.giu ?? [], cheDo, user.id)
+    )
   }).length
   const out: Record<string, number> = {}
   if (ganVe > 0) out['/warehouse/nhap'] = ganVe
-  if (thieu.ganDay > 0) out['/warehouse/phieu'] = thieu.ganDay
+  if (thieu.ganDay > 0) out['/warehouse/phieu-nhap'] = thieu.ganDay
   return out
 }
 

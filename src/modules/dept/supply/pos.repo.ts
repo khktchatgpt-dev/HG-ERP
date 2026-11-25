@@ -475,6 +475,8 @@ export const posRepo = {
    */
   async listWatchFields(): Promise<
     {
+      /** id đơn — số menu Kho đếm "đơn của tôi" theo nhóm vật tư (0305). */
+      id: string
       status: PoStatus
       expected_at: string | null
       assigned_to: string | null
@@ -486,10 +488,11 @@ export const posRepo = {
       .from('supply_purchase_orders')
       // ordered_at/confirmed_at: thiếu thì badge không bắt được đơn 'NCC chưa
       // xác nhận' (isUnconfirmed) trong khi Hộp thư có — hai con số lệch (27/09).
-      .select('status, expected_at, assigned_to, ordered_at, confirmed_at')
+      .select('id, status, expected_at, assigned_to, ordered_at, confirmed_at')
       .not('status', 'in', '("received","cancelled")')
       .limit(2000)
     return (data ?? []) as {
+      id: string
       status: PoStatus
       expected_at: string | null
       assigned_to: string | null

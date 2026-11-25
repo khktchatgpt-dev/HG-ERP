@@ -249,7 +249,7 @@ export function HomNayScreen({
 
       <ThanhTT
         left="Số tính lúc mở trang · F5 để tính lại · số 0 chữ nhạt — hết việc là tốt"
-        right="Phiếu đã ghi, báo cáo, kiểm kê định kỳ ở nhóm Sổ sách trên menu"
+        right="Phiếu nhập, phiếu xuất, kiểm kê định kỳ, báo cáo ở nhóm Sổ sách trên menu"
       />
     </KhoKhung>
   )

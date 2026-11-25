@@ -346,7 +346,7 @@ export function HopDuyet({
         </p>
       )}
       <p className="kh-mut" style={{ margin: 0 }}>
-        Duyệt rồi mà sai: đảo phiếu KK ở Phiếu đã ghi, không huỷ đợt.
+        Duyệt rồi mà sai: mở phiếu KK của đợt và lập phiếu đảo, không huỷ đợt.
       </p>
       {loi && (
         <span className="kh-stop" role="alert">

@@ -315,10 +315,26 @@ export function PhieuChiTietScreen({
     </div>
   )
 
+  // Sổ chứa tờ này, mở đúng THÁNG của nó (sổ theo kỳ, 23/11/2026).
+  const ky = `?ky=${doc.doc_date.slice(0, 7)}`
+  const so =
+    doc.kind === 'receipt'
+      ? { href: `/warehouse/phieu-nhap${ky}`, ten: 'Phiếu nhập' }
+      : doc.kind === 'issue'
+        ? { href: `/warehouse/phieu-xuat${ky}`, ten: 'Phiếu xuất' }
+        : { href: '/warehouse/kiem-ke', ten: 'Kiểm kê định kỳ' }
+
   return (
     <KhoKhung label={`${LOAI[doc.kind]} ${doc.code}`}>
       <DauTrang
-        crumb="Kho › Phiếu đã ghi"
+        crumb={
+          <>
+            Kho ›{' '}
+            <Link href={so.href} className="kh-lnk">
+              {so.ten}
+            </Link>
+          </>
+        }
         title={
           <>
             <span className={`kh-sq ${MAU_LOAI[doc.kind]}`} aria-hidden />
@@ -340,8 +356,8 @@ export function PhieuChiTietScreen({
               >
                 In phiếu
               </ApNut>
-              <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Phiếu đã ghi
+              <ApNut icon={<BookOpen size={15} aria-hidden />} href={so.href}>
+                {so.ten}
               </ApNut>
             </ApNhom>
           </>

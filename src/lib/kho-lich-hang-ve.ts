@@ -34,6 +34,9 @@ export type SapDatRow = {
   owner_name: string | null
   /** yyyy-mm-dd — ngày GĐ duyệt; null = đơn cũ không có dấu. */
   approved_at: string | null
+  /** Nhân viên Kho giữ đơn (theo nhóm vật tư, 0305). */
+  giu?: string[]
+  nhom_vt?: string[]
 }
 
 type CoMoc = { bucket: IncomingBucket; expected_at: string | null }

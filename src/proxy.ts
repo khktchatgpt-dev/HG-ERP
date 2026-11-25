@@ -56,7 +56,7 @@ const MOVED_PREFIXES: ReadonlyArray<readonly [from: string, to: string]> = [
   ['/mua-hang/nhan-hang', '/mua-hang/theo-doi'],
   // Cách xem 'Đang về' trong Đơn mua tách thành mục riêng 'Theo dõi đơn hàng' (01/10/2026 chiều).
   ['/mua-hang/don/dang-ve', '/mua-hang/theo-doi'],
-  ['/planning/docs', '/warehouse/phieu'],
+  ['/planning/docs', '/warehouse/phieu-nhap'],
   ['/planning/board', '/production'],
   ['/planning/tracking', '/mua-hang'],
   ['/planning/van-de', '/mua-hang'],

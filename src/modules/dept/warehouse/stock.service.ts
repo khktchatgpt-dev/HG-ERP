@@ -28,6 +28,7 @@ import {
   type StocktakeLine,
   qty2ActualByIds,
   setQty2Actual,
+  type NhomLoc,
 } from './stock.repo'
 import {
   componentAllocationByCode,
@@ -278,7 +279,7 @@ export type StockRowAvail = StockRow & {
 export const stockService = {
   async listStock(
     user: User,
-    opts: { q?: string; group_name?: string; low_only?: boolean },
+    opts: { q?: string; group_name?: string | NhomLoc; low_only?: boolean },
   ): Promise<StockRowAvail[]> {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
     const [rows, reserved] = await Promise.all([
@@ -338,7 +339,7 @@ export const stockService = {
     user: User,
     opts: {
       q?: string
-      group_name?: string
+      group_name?: string | NhomLoc
       bucket: StockBucket | 'chung'
       page: number
       page_size: number

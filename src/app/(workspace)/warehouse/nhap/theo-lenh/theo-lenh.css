@@ -118,3 +118,11 @@
 .kh.kh .kh-ph .crumb a:hover {
   text-decoration: underline;
 }
+
+/* Đơn của người Kho khác (phụ trách nhóm vật tư, 0305) — vẫn hiện, chữ nhạt. */
+.kh.kh .kh-tb.kh-tb > tbody > tr.kd-khac > td {
+  color: var(--kh-ink3);
+}
+.kh.kh .kh-tb.kh-tb > tbody > tr.kd-khac .kd-lnk {
+  color: var(--kh-ink2);
+}

@@ -488,7 +488,7 @@ export function DangVeScreen({
           code={vuaGhi.code}
           docId={vuaGhi.id}
           detail={`${vuaGhi.detail} — tồn đã cộng, đơn đã tính lại phần còn chờ.`}
-          soPhieuHref="/warehouse/phieu?ro=receipt"
+          soPhieuHref="/warehouse/phieu-nhap"
           onClose={() => router.replace('/mua-hang/theo-doi', { scroll: false })}
         />
       )}

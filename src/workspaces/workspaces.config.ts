@@ -482,23 +482,27 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — Kho hỏi ĐVT · kệ · ngưỡng.
           { href: '/warehouse/vat-tu', label: 'Danh mục vật tư', icon: 'package' },
+          // 24/11/2026 (bản vẽ 27qPqf6o…): thủ kho gán nhóm vật tư cho từng người.
+          { href: '/warehouse/phu-trach', label: 'Phụ trách nhóm', icon: 'users' },
         ],
       },
       {
         heading: 'Sổ sách',
         gap: true,
         items: [
-          // Hoàn thiện A1 (16/09/2026): sổ phiếu CỦA KHO, đảo phiếu ghi sai ở đây.
-          { href: '/warehouse/phieu', label: 'Phiếu đã ghi', icon: 'book-open' },
-          // B6 (19/10/2026): nhập–xuất–tồn theo kỳ, có giá trị (bình quân gia
-          // quyền cả kỳ) — Kho đối chiếu cuối tháng, Kế toán lên sổ 152.
-          { href: '/warehouse/bao-cao', label: 'Báo cáo tháng', icon: 'chart-column' },
+          // 23/11/2026 (bản vẽ JG1wTjeF…): "Phiếu đã ghi" trộn mọi loại tách thành
+          // hai sổ theo kỳ tháng. Số trên Phiếu nhập = thiếu số phiếu NCC 14 ngày.
+          { href: '/warehouse/phieu-nhap', label: 'Phiếu nhập', icon: 'book-open' },
+          { href: '/warehouse/phieu-xuat', label: 'Phiếu xuất', icon: 'book-open' },
           // B7 (19/10/2026): đợt kiểm kê cả nhóm — đếm mù, sổ chốt lúc bắt đầu đếm.
           {
             href: '/warehouse/kiem-ke',
             label: 'Kiểm kê định kỳ',
             icon: 'clipboard-check',
           },
+          // B6 (19/10/2026): nhập–xuất–tồn theo kỳ, có giá trị (bình quân gia
+          // quyền cả kỳ) — Kho đối chiếu cuối tháng, Kế toán lên sổ 152.
+          { href: '/warehouse/bao-cao', label: 'Báo cáo tháng', icon: 'chart-column' },
         ],
       },
       /*

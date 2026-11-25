@@ -172,8 +172,11 @@ export function TonLenhScreen({
             </ApNhom>
             <ApNhom>
               <ApNut href="/warehouse/xuat">Lập phiếu xuất</ApNut>
-              <ApNut icon={<BookOpen size={15} aria-hidden />} href="/warehouse/phieu">
-                Phiếu đã ghi
+              <ApNut
+                icon={<BookOpen size={15} aria-hidden />}
+                href="/warehouse/phieu-xuat"
+              >
+                Sổ phiếu xuất
               </ApNut>
             </ApNhom>
           </>
