@@ -76,6 +76,123 @@ const TIMEOUT_MS = 120_000
 const UDP_INPORT = 4000
 const MAX_TRY = 3
 
+/*
+ * ĐỌC LOG TỪNG KHỐI (26/11/2026). `getAttendances()` của thư viện gửi CÙNG LÚC mọi
+ * yêu cầu khối (máy .201: 35 khối × 64 KB), máy không xếp hàng nổi nên chỉ trả 2–5
+ * khối rồi im; thư viện chờ 10 giây, nuốt lỗi "TIME OUT !! 33 PACKETS REMAIN" và trả
+ * phần dở → cả hai máy dừng đúng ở 8.183 lượt, 3 lần như nhau. Đo cùng ngày: xin
+ * khối sau khi nhận xong khối trước thì .201 đủ 56.883/56.883 (29 giây), .203 đủ
+ * 95.588/95.588 (53 giây).
+ */
+const KHOI_TIMEOUT_MS = 20_000
+const KHOI_THU = 3
+const CMD_DATA = 1501
+const CMD_DATA_WRRQ = 1503
+const GET_ATTENDANCE_LOGS = Buffer.from([0x01, 0x0d, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+const MAX_CHUNK = 65_472
+
+/**
+ * Tách các gói TCP của ZK (tiền tố 8 byte: 4 byte nhận dạng + 4 byte độ dài) đã
+ * đủ trong `buf`. Chỉ lấy dữ liệu của gói CMD_DATA (bỏ 8 byte đầu lệnh); gói khác
+ * (chuẩn bị dữ liệu, ACK, sự kiện quẹt thẻ thời gian thực) bỏ qua. Thuần — có test.
+ */
+export function tachGoiDuLieu(buf: Buffer): { data: Buffer[]; rest: Buffer } {
+  const data: Buffer[] = []
+  let b = buf
+  while (b.length >= 8) {
+    const len = b.readUInt32LE(4)
+    if (b.length < 8 + len) break
+    const pkt = b.subarray(8, 8 + len)
+    b = b.subarray(8 + len)
+    if (pkt.length >= 8 && pkt.readUInt16LE(0) === CMD_DATA) data.push(pkt.subarray(8))
+  }
+  return { data, rest: b }
+}
+
+type Kenh = NonNullable<import('zkteco-js').default['ztcp']>
+
+function nhanKhoi(socket: import('node:net').Socket, size: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    let buf: Buffer = Buffer.alloc(0)
+    let data: Buffer = Buffer.alloc(0)
+    const xong = (err: Error | null, v?: Buffer) => {
+      clearTimeout(t)
+      socket.removeListener('data', on)
+      if (err) reject(err)
+      else resolve(v as Buffer)
+    }
+    const t = setTimeout(
+      () =>
+        xong(
+          new Error(
+            `hết ${KHOI_TIMEOUT_MS / 1000}s, mới nhận ${data.length}/${size} byte`,
+          ),
+        ),
+      KHOI_TIMEOUT_MS,
+    )
+    const on = (chunk: Buffer) => {
+      const r = tachGoiDuLieu(Buffer.concat([buf, chunk]))
+      buf = r.rest
+      if (r.data.length) data = Buffer.concat([data, ...r.data])
+      if (data.length >= size) xong(null, data.subarray(0, size))
+    }
+    socket.on('data', on)
+  })
+}
+
+/** Đọc toàn bộ log qua TCP, xin TỪNG khối một, mỗi khối thử lại tối đa 3 lần. */
+async function docLogTungKhoi(
+  z: Kenh,
+  makeHeader: (cmd: number, session: number, reply: number, data: Buffer) => Buffer,
+): Promise<Buffer> {
+  if (!z.socket) throw new Error('Mất kết nối TCP với máy')
+  await z.freeData()
+  z.replyId++
+  const reply = await z.requestData(
+    makeHeader(CMD_DATA_WRRQ, z.sessionId, z.replyId, GET_ATTENDANCE_LOGS),
+  )
+  // Ít log: máy trả thẳng dữ liệu trong một gói.
+  if (reply.readUInt16LE(8) === CMD_DATA) return reply.subarray(16)
+  const size = reply.subarray(16).readUIntLE(1, 4)
+  const parts: Buffer[] = []
+  for (let start = 0; start < size; start += MAX_CHUNK) {
+    const n = Math.min(MAX_CHUNK, size - start)
+    let got: Buffer | null = null
+    let loi: unknown = null
+    for (let thu = 0; thu < KHOI_THU && !got; thu++) {
+      const p = nhanKhoi(z.socket, n)
+      await z.sendChunkRequest(start, n)
+      got = await p.catch((e: unknown) => {
+        loi = e
+        return null
+      })
+    }
+    if (!got) {
+      throw new Error(
+        `Đọc khối ${start / MAX_CHUNK + 1}/${Math.ceil(size / MAX_CHUNK)} hỏng sau ${KHOI_THU} lần: ${loi instanceof Error ? loi.message : String(loi)}`,
+      )
+    }
+    parts.push(got)
+  }
+  await z.freeData().catch(() => undefined)
+  return Buffer.concat(parts)
+}
+
+/** Giải log 40 byte/lượt (bỏ 4 byte đầu) — cùng bố cục bản vá `decodeRecordData40` ở trên. */
+function giaiLog(buf: Buffer): ZkLog[] {
+  const out: ZkLog[] = []
+  for (let o = 4; o + 40 <= buf.length; o += 40) {
+    const b = buf.subarray(o, o + 40)
+    out.push({
+      code: cStr(b.subarray(2, 11), 'ascii'),
+      at: zkTime(b.readUInt32LE(27)),
+      verifyType: b.readUIntLE(26, 1),
+      state: b.readUIntLE(31, 1),
+    })
+  }
+  return out
+}
+
 export type ZkInfo = {
   serial: string | null
   logCount: number
@@ -128,14 +245,25 @@ export async function readDevice(ip: string, port: number): Promise<ZkRead> {
       code: u.userId,
       name: u.name,
     }))
-    let raw: Awaited<ReturnType<typeof dev.getAttendances>>['data'] = []
+    let logs: ZkLog[] = []
     for (let i = 0; i < MAX_TRY; i++) {
-      raw = (await dev.getAttendances()).data
-      if (raw.length >= info.logCounts) break
+      if (dev.connectionType === 'tcp' && dev.ztcp) {
+        const utils = (await import('zkteco-js/src/helper/utils.js')).default
+        logs = giaiLog(await docLogTungKhoi(dev.ztcp, utils.createTCPHeader))
+      } else {
+        // UDP (máy không mở TCP): đường của thư viện.
+        logs = (await dev.getAttendances()).data.map((r) => ({
+          code: r.user_id,
+          at: r.record_time,
+          verifyType: r.type,
+          state: r.state,
+        }))
+      }
+      if (logs.length >= info.logCounts) break
     }
-    if (raw.length < info.logCounts) {
+    if (logs.length < info.logCounts) {
       throw new Error(
-        `Máy ${ip} báo ${info.logCounts} lượt nhưng ${MAX_TRY} lần đọc chỉ được ${raw.length}. Thử kéo lại sau ít phút.`,
+        `Máy ${ip} báo ${info.logCounts} lượt nhưng ${MAX_TRY} lần đọc chỉ được ${logs.length}. Thử kéo lại sau ít phút.`,
       )
     }
     return {
@@ -143,12 +271,7 @@ export async function readDevice(ip: string, port: number): Promise<ZkRead> {
       logCount: info.logCounts,
       logCapacity: info.logCapacity,
       users,
-      logs: raw.map((r) => ({
-        code: r.user_id,
-        at: r.record_time,
-        verifyType: r.type,
-        state: r.state,
-      })),
+      logs,
     }
   } finally {
     await dev.disconnect().catch(() => undefined)
