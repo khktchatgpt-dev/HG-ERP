@@ -81,7 +81,7 @@ export function PhieuNhapChiTietScreen({
     <ScreenFrame>
       <Crumb
         path={[
-          { label: 'Theo dõi đơn hàng', href: '/mua-hang/theo-doi' },
+          { label: 'Hàng về', href: '/mua-hang/theo-doi' },
           { label: 'Đã về', href: '/mua-hang/theo-doi/da-ve' },
           row.code,
         ]}

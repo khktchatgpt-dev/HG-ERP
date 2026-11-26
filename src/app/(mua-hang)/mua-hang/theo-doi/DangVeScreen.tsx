@@ -460,7 +460,7 @@ export function DangVeScreen({
       <ScreenHeader
         compact
         eyebrow="Mua hàng"
-        title="Theo dõi đơn hàng"
+        title="Hàng về"
         chain={<XemTheoDoi at="dang-ve" />}
         facts={[
           { label: 'Đang về', value: dangLoc ? `${kept.length}/${theoNguoi.length}` : String(theoNguoi.length) }, // prettier-ignore

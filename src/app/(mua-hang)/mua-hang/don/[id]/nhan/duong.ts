@@ -27,7 +27,7 @@ export const DUONG: Record<
   },
   'cung-ung': {
     home: '/mua-hang/theo-doi',
-    crumbs: [{ label: 'Theo dõi đơn hàng', href: '/mua-hang/theo-doi' }],
+    crumbs: [{ label: 'Hàng về', href: '/mua-hang/theo-doi' }],
     phieu: (id) => `/mua-hang/don/${id}/nhan`,
     wrap: 'contents',
   },

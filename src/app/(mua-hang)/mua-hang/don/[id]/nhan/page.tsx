@@ -40,7 +40,7 @@ export default async function Page({
           next={
             <>
               <Btn icon="quayLai" href="/mua-hang/theo-doi">
-                Về Theo dõi đơn hàng
+                Quay lại Hàng về
               </Btn>
               <Btn icon="don" primary href={`/mua-hang/don/${r.po.id}`}>
                 {r.chuaGui ? `Mở đơn ${r.po.code} để gửi NCC` : `Mở đơn ${r.po.code}`}

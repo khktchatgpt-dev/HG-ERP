@@ -110,7 +110,7 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                 <div className="text-k-sm mx-[var(--gutter)] mt-2 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-[var(--act-line)] bg-[var(--act-wash)] px-3 py-2 text-[var(--act-text)]">
                   <span>
                     Mục này chỉ để <b>xem</b>. Nhận hàng, thêm / sửa / tách đợt giao, chốt
-                    thiếu, sự cố — ghi ở <b>Theo dõi đơn hàng</b>.
+                    thiếu, sự cố — ghi ở trang <b>Hàng về</b>.
                   </span>
                   <Link
                     href={giaoNhanHref}
@@ -177,8 +177,8 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
                         là PHÍA KHO — đã lập phiếu gì, còn thiếu bao nhiêu, và
                         là nơi bấm "Chốt thiếu" khi NCC không giao nữa. */}
                     <p className="text-k-sm mb-1 text-[var(--ink-3)]">
-                      Phía Kho đã nhận gì — số thật trên phiếu nhập. Chốt thiếu ở Theo dõi
-                      đơn hàng.
+                      Phía Kho đã nhận gì — số thật trên phiếu nhập. Chốt thiếu ở trang
+                      Hàng về.
                     </p>
                   </div>
                   <NhanTheoDotGrid
@@ -220,7 +220,7 @@ export function GiaoNhan({ d }: { d: DonCtx }) {
               {openShortLines > 0 && missingTotal <= 1e-6 && (
                 <div className="text-k-sm px-[var(--gutter)] pt-2 text-[var(--ink-2)]">
                   {openShortLines} dòng đã về thiếu. NCC không giao nữa thì chốt thiếu ở
-                  Theo dõi đơn hàng, rồi tạo đơn bổ sung (cùng hoặc khác NCC) cho phần đã
+                  trang Hàng về, rồi tạo đơn bổ sung (cùng hoặc khác NCC) cho phần đã
                   chốt.
                 </div>
               )}

@@ -6,7 +6,7 @@ import { todayVn } from '@/lib/date-vn'
 import { DaVeScreen } from './DaVeScreen'
 import { taiGiaoNhan } from '../giao-nhan/tai-giao-nhan'
 
-export const metadata = { title: 'Mua hàng · Theo dõi đơn hàng · Đã về' }
+export const metadata = { title: 'Mua hàng · Hàng về · Đã về' }
 export const dynamic = 'force-dynamic'
 
 

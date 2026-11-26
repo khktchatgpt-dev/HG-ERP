@@ -17,7 +17,6 @@ import { classifyTodo, countMyTodos, incomingBucket } from '@/lib/supply-watch'
 import { defaultScope, isMyPo, myLsxIds } from '@/lib/supply-scope'
 import { todayVn } from '@/lib/date-vn'
 import { countMeetingIssues } from '@/modules/dept/supply/lsx-supply.service'
-import { demLenhChoSoatKhongCho } from '@/modules/dept/supply/lenh-doi.service'
 import { poReviewService } from '@/modules/dept/supply/po-review.service'
 import { tasksService } from '@/modules/workflow/tasks/tasks.service'
 import type { User } from '@/modules/core/users/users.repo'
@@ -254,13 +253,12 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
   if (ganVe > 0) out['/mua-hang/theo-doi'] = ganVe
   if (issues > 0) out['/mua-hang'] = issues
   /*
-    SOÁT THAY ĐỔI = số lệnh ĐỔI CHỜ SOÁT (02/11/2026; B2 đặt ở Kế hoạch mua, T1
-    dời sang trang riêng) — đếm CẢ PHÒNG, cùng nguồn chip "Chờ soát" của trang
-    `/mua-hang/soat` (`trangThaiChoSoat`):
-    định mức / lệnh đổi thì cả phòng phải thấy, không chỉ người có đơn. Không
-    chờ phép tính: lần đầu chưa có số thì menu bỏ trống, lần mở trang sau là có.
+    SOÁT THAY ĐỔI KHÔNG CÒN SỐ TRÊN MENU (21/11/2026, B1 xếp lại menu Cung ứng).
+    Mục đã vào nhóm "Ít dùng" gập sẵn: gập thì số của mục lên đầu nhóm, mà từ
+    02/11 tới nay chưa ai bấm soát lần nào (`supply_lsx_reviews` 0 dòng) — một
+    con số không ai xử lý. Trang `/mua-hang/soat` vẫn đếm "Chờ soát" bằng
+    `trangThaiChoSoat` như cũ. B3 (trang "Cần đặt") đưa dấu "định mức đổi" lên
+    đầu nhóm lệnh, đúng chỗ người mua đang nhìn.
   */
-  const choSoat = await demLenhChoSoatKhongCho()
-  if (choSoat) out['/mua-hang/soat'] = choSoat
   return out
 }

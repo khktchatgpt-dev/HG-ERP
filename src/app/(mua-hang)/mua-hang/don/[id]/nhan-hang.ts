@@ -135,7 +135,7 @@ export function shipmentEmptyHint(
   xemThoi = false,
 ): string {
   if (xemThoi && (status === 'approved' || status === 'ordered'))
-    return 'Lịch NCC hẹn ghi ở hộp Giao nhận trên Theo dõi đơn hàng.'
+    return 'Lịch NCC hẹn ghi ở hộp Giao nhận trên trang Hàng về.'
   switch (status) {
     case 'draft':
       return 'Chia đợt trong lúc sửa đơn; lịch đó in lên phiếu gửi nhà cung cấp.'

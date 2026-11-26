@@ -174,7 +174,7 @@ export function SoHenGiaoGrid({
         <Empty
           headline="Chưa có mốc hẹn giao nào"
           reason="Sổ bắt đầu ghi từ 27/09/2026: khi NCC xác nhận, thêm đợt, dời hay huỷ đợt, dời hẹn cả đơn."
-          next="Mốc hẹn ghi ở hộp Giao nhận trên Theo dõi đơn hàng (NCC xác nhận, thêm / dời đợt)."
+          next="Mốc hẹn ghi ở hộp Giao nhận trên trang Hàng về (NCC xác nhận, thêm / dời đợt)."
         />
       </div>
     )
@@ -234,7 +234,7 @@ export function SuCoGrid({
       <div className="text-k-sm px-[var(--gutter)] pb-3 text-[var(--ink-2)]">
         {canEdit
           ? 'Chưa ghi sự cố nào — hàng sai quy cách, thiếu, dư, hỏng hay giao trễ thì ghi ở đây thay vì sửa đơn cho khớp.'
-          : 'Chưa ghi sự cố nào. Hàng sai quy cách, thiếu, dư, hỏng hay giao trễ ghi ở hộp Giao nhận trên Theo dõi đơn hàng.'}
+          : 'Chưa ghi sự cố nào. Hàng sai quy cách, thiếu, dư, hỏng hay giao trễ ghi ở hộp Giao nhận trên trang Hàng về.'}
       </div>
     )
   }

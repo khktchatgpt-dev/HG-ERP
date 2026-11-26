@@ -104,7 +104,7 @@ describe('receiveActions', () => {
   })
   it('trang đơn chỉ xem: không bảo bấm nút không có; không lặp câu "giao một lần"', () => {
     expect(shipmentEmptyHint('ordered', true, true)).not.toMatch(/Bấm/)
-    expect(shipmentEmptyHint('ordered', true, true)).toMatch(/Theo dõi đơn hàng/)
+    expect(shipmentEmptyHint('ordered', true, true)).toMatch(/trang Hàng về/)
     expect(shipmentEmptyHint('received', true)).toBe('')
   })
 })

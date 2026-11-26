@@ -298,7 +298,7 @@ export function DaVeScreen({
       <ScreenHeader
         compact
         eyebrow="Mua hàng"
-        title="Theo dõi đơn hàng"
+        title="Hàng về"
         chain={<XemTheoDoi at="da-ve" />}
         facts={[
           {

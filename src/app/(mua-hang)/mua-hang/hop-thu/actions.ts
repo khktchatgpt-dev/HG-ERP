@@ -129,7 +129,7 @@ export const KIND_ACTION: Record<SupplyTodoKind, ActionSpec> = {
     kindOfUi: 'sheet',
     stakes: 'vua',
     sheetHint:
-      'Chỉ bấm khi nhà cung cấp đã nhận đơn và đồng ý giao. Đơn sang "Chờ giao"; lịch giao lúc soạn giữ nguyên, NCC hẹn khác thì sửa đợt ở Theo dõi đơn hàng.',
+      'Chỉ bấm khi nhà cung cấp đã nhận đơn và đồng ý giao. Đơn sang "Chờ giao"; lịch giao lúc soạn giữ nguyên, NCC hẹn khác thì sửa đợt ở trang Hàng về.',
     build: ({ po }) => [
       {
         path: `/api/dept/supply/pos/${po.id}/confirm`,

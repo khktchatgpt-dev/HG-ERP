@@ -282,7 +282,7 @@ export function NhacSoNccSheet({
         />
       </label>
       <p className="text-k-sm mt-2 text-[var(--ink-3)]">
-        Bổ sung sau vẫn được: Theo dõi đơn hàng › Đã về › Sửa phiếu › Sửa thông tin (không
+        Bổ sung sau vẫn được: Hàng về › Đã về › Sửa phiếu › Sửa thông tin (không
         đổi tồn).
       </p>
     </Sheet>

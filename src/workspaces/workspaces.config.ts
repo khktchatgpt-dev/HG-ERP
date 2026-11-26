@@ -604,10 +604,23 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         màn mới có test canh ở `workspaces.config.test.ts`: gỡ một màn mới mà
         quên đường thay thế thì test đỏ, chứ không phải người dùng phát hiện.
       */
+      /*
+        XẾP LẠI THEO VÒNG VIỆC CỦA NGƯỜI MUA (B1, 21/11/2026, bản rà
+        77oKZUg7NYzErJHCks99hE — chủ dự án: "quá nhiều trang, thông tin rối").
+        Một ngày người mua chỉ hỏi bốn câu: việc hôm nay · lệnh còn đặt gì · đơn
+        và hàng ở đâu · mua của ai. Nhóm "Mua hàng" giữ các trang trả lời ba câu
+        đầu; câu thứ tư ở "Danh mục & tra cứu". Bốn trang đo 30 ngày gần như không
+        ai ghi (Kế hoạch mua 0, Soát thay đổi 0, Vận chuyển 0 — từ trước tới nay;
+        Hạng mục 6) vào nhóm "Ít dùng" gập sẵn: CHƯA xoá, link cũ vẫn mở.
+        Bước sau (cần bản vẽ): B2 gộp Bàn làm việc + Hộp thư thành "Hôm nay",
+        B3 gộp NPL theo lệnh + Lệnh sản xuất thành "Cần đặt".
+      */
       {
-        heading: 'Nghiệp vụ',
+        heading: 'Mua hàng',
         items: [
-          { href: '/mua-hang', label: 'Bàn làm việc', icon: 'home' },
+          // `exact`: mọi trang khu đều nằm dưới `/mua-hang/…` — thiếu nó thì Bàn làm
+          // việc sáng đôi cùng mục đang mở (thấy 21/11/2026 khi xếp lại menu).
+          { href: '/mua-hang', label: 'Bàn làm việc', icon: 'home', exact: true },
           /*
             CHỜ TÔI XEM (05/11/2026, bản vẽ RcqWLU7F1z33btAR97gZBo) — trưởng
             phòng Cung ứng xem nháp NV lập rồi trình Giám đốc. Số đếm = đúng số
@@ -652,23 +665,17 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // lsx nhưng tên đặt sai"). Trước đó menu ghi "Yêu cầu mua" mà đầu trang ghi
           // "Vật tư theo lệnh" — hai tên một màn. URL giữ `/yeu-cau` cho link cũ.
           { href: '/mua-hang/yeu-cau', label: 'Lệnh sản xuất', icon: 'factory' },
-          // BẢNG KÊ VẬT TƯ (08/10/2026, chủ dự án: "bảng kê làm trang riêng trên menu") —
-          // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.
-          // 22/10/2026 đổi tên KẾ HOẠCH MUA: bảng kê → chọn NCC → lên đơn trên một màn.
-          { href: '/mua-hang/bang-ke', label: 'Kế hoạch mua', icon: 'clipboard-list' },
-          // 02/11/2026 (T1): trang riêng "lệnh nào đổi từ lần soát" — định mức, lệnh
-          // SX (và đơn hàng Sale ở T4). Mang số chờ soát thay cho Kế hoạch mua.
-          { href: '/mua-hang/soat', label: 'Soát thay đổi', icon: 'arrow-left-right' },
+          // NPL THEO LỆNH (20/11/2026, chủ dự án: "muốn biết NPL nào chưa đặt, còn
+          // thiếu phải vào từng LSX, từng PO") — mọi dòng NPL trên đơn mua của các
+          // lệnh đang chạy, một bảng. Không số trên menu (Q6): số trễ nằm ở tab.
+          { href: '/mua-hang/npl', label: 'NPL theo lệnh', icon: 'boxes' },
           { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
-          // Việc ngoài sản xuất gom nhiều đơn mua (0230) — Xây dựng văn phòng, Dự trữ kho…
-          { href: '/mua-hang/hang-muc', label: 'Hạng mục', icon: 'folder-kanban' },
-          // THEO DÕI ĐƠN HÀNG (01/10/2026, chủ dự án): đơn đã gửi NCC → tới khi
-          // hàng về kho, gồm cả chuyến hàng. Thay mục 'Nhận hàng' / cách xem
-          // 'Đang về' trong Đơn mua — link cũ do proxy chuyển. Đơn chưa gửi ở Đơn mua.
-          { href: '/mua-hang/theo-doi', label: 'Theo dõi đơn hàng', icon: 'truck' },
-          // Đơn vị vận chuyển + phiếu phí theo chuyến — TÁCH khỏi Nhà cung cấp
-          // (chủ dự án chốt 28/09/2026: "nhà xe không chung với nhà cung cấp").
-          { href: '/mua-hang/van-chuyen', label: 'Vận chuyển', icon: 'route' },
+          // HÀNG VỀ (tên cũ "Theo dõi đơn hàng", 01/10/2026 → đổi 21/11/2026, B1):
+          // đơn đã gửi NCC → tới khi hàng về kho, gồm cả chuyến hàng và nhận hàng
+          // (người mua lập 62/67 phiếu nhập theo đơn trong 30 ngày). Tên nói đúng câu
+          // trang trả lời: "hàng nào về hôm nay, trễ, chưa có ngày". Đầu trang + đường
+          // dẫn crumb đổi cùng, không để "hai tên một màn". URL giữ `/theo-doi`.
+          { href: '/mua-hang/theo-doi', label: 'Hàng về', icon: 'truck' },
           /*
             HOÁ ĐƠN NCC ĐÃ RỜI KHU CUNG ỨNG (17/09/2026, chủ dự án: "cung ứng
             không quản lí về hoá đơn").
@@ -689,6 +696,31 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/mua-hang/vat-tu', label: 'Vật tư', icon: 'package' },
           { href: '/mua-hang/bang-gia', label: 'Bảng giá', icon: 'circle-dollar-sign' },
           { href: '/mua-hang/ton', label: 'Tồn & cân đối', icon: 'boxes' },
+        ],
+      },
+      /*
+        ÍT DÙNG (B1, 21/11/2026) — gập sẵn, như nhóm cùng tên của Kho. Đo 30 ngày
+        tới 20/11: Kế hoạch mua 0 dòng nhu cầu / chọn NCC, Soát thay đổi 0 lần soát,
+        Vận chuyển 0 chuyến / 0 phiếu phí (cả ba: 0 từ trước tới nay), Hạng mục 6.
+        App không đếm lượt mở trang nên CHƯA xoá — B5 đếm lại sau 30 ngày rồi hỏi.
+        Soát thay đổi bỏ số trên menu: gập thì số đó lên đầu nhóm mà không ai xử lý.
+      */
+      {
+        heading: 'Ít dùng',
+        gap: true,
+        items: [
+          // Việc ngoài sản xuất gom nhiều đơn mua (0230) — Xây dựng văn phòng, Dự trữ kho…
+          { href: '/mua-hang/hang-muc', label: 'Hạng mục', icon: 'folder-kanban' },
+          // BẢNG KÊ VẬT TƯ (08/10/2026, chủ dự án: "bảng kê làm trang riêng trên menu") —
+          // lệnh này còn phải mua gì, bao nhiêu, để lên đơn. Tách khỏi màn lệnh.
+          // 22/10/2026 đổi tên KẾ HOẠCH MUA: bảng kê → chọn NCC → lên đơn trên một màn.
+          { href: '/mua-hang/bang-ke', label: 'Kế hoạch mua', icon: 'clipboard-list' },
+          // 02/11/2026 (T1): trang riêng "lệnh nào đổi từ lần soát" — định mức, lệnh
+          // SX (và đơn hàng Sale ở T4).
+          { href: '/mua-hang/soat', label: 'Soát thay đổi', icon: 'arrow-left-right' },
+          // Đơn vị vận chuyển + phiếu phí theo chuyến — TÁCH khỏi Nhà cung cấp
+          // (chủ dự án chốt 28/09/2026: "nhà xe không chung với nhà cung cấp").
+          { href: '/mua-hang/van-chuyen', label: 'Vận chuyển', icon: 'route' },
         ],
       },
       /*

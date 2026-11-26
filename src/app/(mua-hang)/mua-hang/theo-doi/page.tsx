@@ -10,7 +10,7 @@ import { poCostsRepo } from '@/modules/dept/supply/po-costs.repo'
 import { DangVeScreen } from './DangVeScreen'
 import { taiGiaoNhan } from './giao-nhan/tai-giao-nhan'
 
-export const metadata = { title: 'Mua hàng · Theo dõi đơn hàng' }
+export const metadata = { title: 'Mua hàng · Hàng về' }
 export const dynamic = 'force-dynamic'
 
 /**
